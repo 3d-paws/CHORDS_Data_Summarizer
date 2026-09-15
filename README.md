@@ -1,707 +1,228 @@
 # CHORDS Data Summarizer
 
-A Python tool for creating quality-controlled meteorological summaries from observational data exported from a CHORDS portal.
+A Python tool for creating quality-controlled meteorological summaries from observational data exported from CHORDS.
 
-The CHORDS Data Summarizer is designed primarily for **3D-PAWS weather stations** and related environmental monitoring networks. It converts raw CHORDS observations into standardized 15-minute, hourly, and daily summary files while applying configurable quality-control checks and evaluating data completeness.
-
-The tool is designed to accommodate different station configurations, reporting intervals, sensor combinations, climates, and generations of 3D-PAWS hardware.
+The CHORDS Data Summarizer is designed primarily for **3D-PAWS weather stations** and related environmental monitoring networks. It converts CHORDS CSV observations into standardized **15-minute, hourly, and daily summaries** while applying configurable quality-control checks and evaluating data completeness.
 
 ## Features
 
-The summarizer currently supports:
-
 * 15-minute, hourly, and daily meteorological summaries
 * Configurable regional quality-control profiles
-* Explicit station observation intervals
-* Observation completeness estimates
-* Variable-level completeness
-* Missing and sentinel value handling
-* Environmental range QC
+* Observation and variable-level completeness
+* Missing/sentinel value and environmental range QC
 * Temporal spike/dip QC
-* Circular averaging of wind direction
-* Maximum wind gust and corresponding gust direction
+* Circular wind-direction averaging and maximum gust direction
 * Incremental and cumulative precipitation comparisons
-* Dual rain gauge stations
-* Soil and grass temperature measurements
-* Wet Bulb Temperature (WBT)
-* Wet Bulb Globe Temperature (WBGT)
-* Different station sensor configurations
-* Legacy and current 3D-PAWS variable names
-* 1-minute and 15-minute observation intervals
+* Single and dual rain gauge support
+* Soil and grass temperature support
+* Wet Bulb Temperature (WBT) and Wet Bulb Globe Temperature (WBGT)
+* Support for current and legacy 3D-PAWS variable names
+* Configurable observation intervals, including 1-minute and 15-minute stations
 
 Stations do not need to contain every supported measurement. Variables that are not present in the source data are omitted from the resulting summaries.
 
----
+## Installation
 
-# Requirements
+Clone the repository:
 
-The tool requires Python 3 and the Python packages used by `summarize_chords.py`.
+```bash id="66icw2"
+git clone https://github.com/3d-paws/CHORDS_Data_Summarizer.git
+cd CHORDS_Data_Summarizer
+```
 
-A Python virtual environment is recommended.
+Create and activate a Python virtual environment:
 
-For example:
-
-```bash
+```bash id="dpx0sa"
 python3 -m venv .venv
 source .venv/bin/activate
 ```
 
-Install the required dependencies for the tool, including:
+On Windows:
 
-```bash
-pip install pandas numpy python-dotenv
+```bash id="rj5p2v"
+.venv\Scripts\activate
 ```
 
----
+Install the required packages:
 
-# Files
-
-A typical installation contains:
-
-```text
-summarize_chords.py
-summary.env
-summary_config_nadi.json
-summary_config_addis.json
-summary_config_adama.json
-summary_config_nairobi.json
+```bash id="0a89e8"
+pip install -r requirements.txt
 ```
 
-### `summarize_chords.py`
+## Configuration
 
-The main processing script.
+Copy the example environment file:
 
-### `summary.env`
-
-Defines the output directory, QC profile, expected observation interval, and missing-observation gap threshold.
-
-### `summary_config_*.json`
-
-Regional configuration files containing variable definitions, CHORDS column mappings, QC limits, temporal QC settings, and aggregation rules.
-
----
-
-# Input Data
-
-The summarizer accepts a CSV containing observations exported from CHORDS.
-
-The file must contain a timestamp column named:
-
-```text
-Time
+```bash id="fjx33k"
+cp summary.env.example summary.env
 ```
 
-The remaining columns contain the environmental measurements available for that CHORDS instrument.
+Then edit `summary.env` for the station being processed.
 
-For example:
+For a station recording observations approximately once per minute:
 
-```text
-Time
-SHT31D Temperature (degC)
-SHT31D Relative Humidity (%)
-BMP390 Pressure (hPa)
-Wind Speed (m/s)
-Wind Direction (deg)
-Rain Gauge (mm H2O)
-...
-```
-
-Older 3D-PAWS and FEWS NET stations may use different names, such as:
-
-```text
-SHT Temperature (degC)
-BMX Pressure 1 (hPa)
-MCP Temperature 1 (degC)
-Rain Gauge 1 (mm)
-Rain Gauge 1 Total Today (mm/day)
-```
-
-Multiple source-column names can be mapped to the same internal measurement through the regional JSON configuration.
-
-This allows the summarizer to process data from different generations of station hardware without requiring the source CSV to be modified.
-
----
-
-# Running the Summarizer
-
-Run:
-
-```bash
-python summarize_chords.py /path/to/file.csv
-```
-
-For example:
-
-```bash
-python summarize_chords.py \
-  /Users/username/Documents/CHORDS/station_data.csv
-```
-
-The script reads its settings from:
-
-```text
-summary.env
-```
-
----
-
-# Configuration
-
-A typical `summary.env` file looks like:
-
-```text
-OUTPUT_PATH=/Users/username/Documents/CHORDS/Summaries
-
+```text id="z04ycp"
+OUTPUT_PATH=/path/to/CHORDS/Summaries
 QC_PROFILE=nadi
-
-EXPECTED_INTERVAL_SECONDS=60
-
-GAP_THRESHOLD_SECONDS=120
-```
-
-## Output Path
-
-`OUTPUT_PATH` determines where the generated summary CSV files are saved.
-
-For example:
-
-```text
-OUTPUT_PATH=/Users/username/Documents/CHORDS/Summaries
-```
-
-## QC Profile
-
-`QC_PROFILE` selects the regional JSON configuration used for variable mapping and quality control.
-
-For example:
-
-```text
-QC_PROFILE=nadi
-```
-
-loads:
-
-```text
-summary_config_nadi.json
-```
-
-Current profiles include:
-
-```text
-nadi
-addis
-adama
-nairobi
-```
-
-Regional profiles allow reasonable environmental ranges to be adjusted for different climates and elevations.
-
-For example, station pressure expected at a high-elevation site such as Addis Ababa or Nairobi is substantially lower than station pressure expected near sea level in Fiji.
-
-## Expected Observation Interval
-
-`EXPECTED_INTERVAL_SECONDS` defines how frequently the station is expected to record an observation.
-
-For a 1-minute station:
-
-```text
-EXPECTED_INTERVAL_SECONDS=60
-```
-
-For a 15-minute station:
-
-```text
-EXPECTED_INTERVAL_SECONDS=900
-```
-
-The expected interval is intentionally configured rather than automatically inferred.
-
-Stations can experience communications outages while continuing to collect observations locally. Stored observations may later be transmitted after communications are restored.
-
-Automatically inferring the station cadence from gaps in the dataset could therefore mistake a communications or data gap for a change in station configuration.
-
-The configured observation interval represents the intended measurement cadence.
-
-## Gap Threshold
-
-`GAP_THRESHOLD_SECONDS` determines when the time between observations becomes large enough to infer that one or more observations are missing.
-
-For a nominal 1-minute station:
-
-```text
 EXPECTED_INTERVAL_SECONDS=60
 GAP_THRESHOLD_SECONDS=120
 ```
 
-For a nominal 15-minute station:
+For a station recording observations every 15 minutes:
 
-```text
+```text id="7fj3zs"
+OUTPUT_PATH=/path/to/CHORDS/Summaries
+QC_PROFILE=nairobi
 EXPECTED_INTERVAL_SECONDS=900
 GAP_THRESHOLD_SECONDS=1800
 ```
 
-The gap threshold allows normal timestamp variation without incorrectly identifying observations as missing.
+### Configuration Options
 
----
+* **`OUTPUT_PATH`** — Directory where summary files will be saved.
+* **`QC_PROFILE`** — Regional QC configuration to use.
+* **`EXPECTED_INTERVAL_SECONDS`** — Expected time between station observations.
+* **`GAP_THRESHOLD_SECONDS`** — Gap required before missing observations are inferred.
 
-# Output Files
+The expected observation interval is explicitly configured rather than automatically inferred so that communications outages, stored observations, and later data backfills are not mistaken for changes in station measurement cadence.
 
-For each input file, the summarizer creates:
+## Regional QC Profiles
 
-```text
+Regional QC profiles are stored in:
+
+```text id="k5v9pb"
+configs/
+```
+
+Current profiles include:
+
+| Profile   | Region                |
+| --------- | --------------------- |
+| `nadi`    | Nadi, Fiji            |
+| `addis`   | Addis Ababa, Ethiopia |
+| `adama`   | Adama, Ethiopia       |
+| `nairobi` | Nairobi, Kenya        |
+
+Profiles define variable mappings, acceptable environmental ranges, temporal QC settings, summary statistics, and other variable-specific behavior.
+
+Different profiles allow QC limits to account for differences in climate and station elevation.
+
+## Usage
+
+Run the summarizer with a CHORDS CSV file:
+
+```bash id="nd7ljj"
+python summarize_chords.py /path/to/station_data.csv
+```
+
+For example:
+
+```bash id="hh0sxw"
+python summarize_chords.py \
+  /Users/username/Documents/CHORDS/station_data.csv
+```
+
+The input CSV must contain a CHORDS timestamp column named:
+
+```text id="ql1zj2"
+Time
+```
+
+The script automatically maps supported CHORDS measurement columns using the selected QC profile.
+
+During processing, the console reports variable mappings, missing observations, QC results, unmapped columns, and generated output files.
+
+## Output
+
+Each input file produces:
+
+```text id="8duj6k"
 <filename>_15min.csv
 <filename>_hourly.csv
 <filename>_daily.csv
 ```
 
-For example:
+The exact output columns depend on the measurements available for the station.
 
-```text
-station_data_15min.csv
-station_data_hourly.csv
-station_data_daily.csv
-```
+Summary files can include:
 
-The exact measurements included in each file depend on the sensors available in the input data and the selected configuration profile.
+* Temperature, relative humidity, and pressure statistics
+* Wind speed, direction, gust, and gust direction
+* Incremental and cumulative precipitation
+* Dual rain gauge comparisons
+* Soil and grass temperature
+* WBT and WBGT
+* Observation completeness
+* Individual variable completeness
 
----
+## Quality Control
 
-# Observation Completeness
+Quality control is applied before summary statistics are calculated.
 
-Each summary period contains:
+The summarizer currently supports:
 
-```text
+* Missing and sentinel value detection
+* Configurable environmental range checks
+* Temporal spike/dip detection
+
+QC settings are defined independently for each measurement in the selected regional profile.
+
+The regional limits are intended as practical **first-pass engineering QC** and are not a replacement for network-specific climatological QC or expert review.
+
+## Observation Completeness
+
+Each summary period includes:
+
+```text id="1lnb6j"
 Observation Count
 Estimated Missed Observations
 Observation Completeness (%)
 ```
 
-Observation completeness describes whether the station produced the expected number of observations.
+Missing observations are determined from measurement timestamps using the configured observation interval.
 
-Missing observations are inferred from the measurement timestamps in the original dataset using the configured expected observation interval and gap threshold.
+Individual variables can also report their own completeness. This helps distinguish between a station-level data gap and a problem affecting an individual sensor.
 
-Importantly, missing observations are determined **before environmental QC is applied**.
+## Meteorological Processing
 
-This distinguishes between:
+The summarizer uses measurement-appropriate aggregation methods.
 
-* an observation that was never recorded or is absent from the dataset, and
-* an observation that exists but contains an invalid sensor measurement.
+Examples include:
 
-For example, if the station reports normally but one temperature measurement contains `-999.9`, the observation itself is still counted as received. The temperature measurement will instead affect the completeness of that individual variable.
+* Mean temperature, humidity, and pressure for 15-minute and hourly summaries
+* Mean, minimum, and maximum temperature, humidity, and pressure for daily summaries
+* Circular averaging for wind direction
+* Mean and maximum wind speed and gust
+* Wind direction corresponding to the maximum gust
+* Maximum WBT and WBGT
+* Summed incremental precipitation
+* Reset-aware cumulative precipitation changes
+* Comparisons between redundant rain gauges
 
----
+Detailed calculation and QC methods are documented in [`docs/TECHNICAL_DETAILS.md`](docs/TECHNICAL_DETAILS.md).
 
-# Variable Completeness
+## Legacy Station Support
 
-The summarizer can also calculate completeness for individual environmental variables.
+3D-PAWS variable names have changed across different hardware, firmware, and station configurations.
 
-Variable completeness accounts for both:
+Regional configuration files can define multiple CHORDS column aliases for the same measurement. This allows newer 3D-PAWS stations and older configurations, including legacy FEWS NET stations, to use the same summarization tool.
 
-* observations missing from the dataset, and
-* measurements removed by QC.
+## Known Limitations
 
-For example:
+* The configured observation interval currently applies to the entire input file.
+* The first cumulative precipitation observation cannot determine rainfall that occurred before the beginning of the file.
+* New station configurations may require additional CHORDS column aliases.
+* Regional QC limits should be reviewed before applying a profile to substantially different environmental conditions.
+* Persistence/stuck-sensor QC is not currently implemented.
 
-```text
-Observation Completeness (%)       98.0
-SHT Temperature Completeness (%)   97.5
-Wind Direction Completeness (%)    91.2
-```
+## Technical Documentation
 
-This makes it possible to distinguish between a station-level data outage and a problem affecting an individual sensor.
+For details about the processing algorithms, QC logic, completeness calculations, precipitation handling, wind calculations, and regional configuration format, see:
 
----
+[`docs/TECHNICAL_DETAILS.md`](docs/TECHNICAL_DETAILS.md)
 
-# Quality Control
+## Related Projects
 
-Quality control is applied before meteorological summary statistics are calculated.
+The CHORDS Data Summarizer operates independently on compatible CHORDS CSV files.
 
-QC behavior is defined in the selected regional JSON configuration.
-
-## Missing and Sentinel Values
-
-3D-PAWS sensors may use large negative values to represent missing measurements or sensor errors.
-
-For example:
-
-```text
--999.9
-```
-
-The configuration defines a missing-value threshold:
-
-```json
-"missing_value_threshold": -900
-```
-
-Numeric measurements at or below this threshold are treated as missing and excluded from summary calculations.
-
-## Range QC
-
-Individual measurements can have configurable minimum and maximum acceptable values.
-
-For example:
-
-```json
-"min": 10,
-"max": 45
-```
-
-Values outside this range are converted to missing values before aggregation.
-
-QC ranges are defined by profile because reasonable environmental limits vary by climate and station elevation.
-
-These limits are intended as practical first-pass engineering QC rather than universal climatological limits.
-
-## Temporal Spike/Dip QC
-
-Selected variables can also be checked for isolated temporal spikes or dips.
-
-The algorithm compares a measurement with valid observations immediately before and after it.
-
-A measurement can be rejected when:
-
-* it differs substantially from the preceding observation,
-* it differs substantially from the following observation,
-* the observations on either side remain reasonably consistent with each other,
-* the change occurs rapidly enough to meet the configured rate threshold, and
-* the neighboring observations are sufficiently close in time.
-
-This allows isolated sensor errors to be removed without rejecting legitimate gradual environmental changes.
-
-Temporal QC parameters are configured independently for each measurement.
-
----
-
-# Summary Statistics
-
-Different meteorological variables require different aggregation methods.
-
-The aggregation rules are defined in the regional configuration files.
-
-## Temperature
-
-For primary air-temperature measurements:
-
-**15-minute**
-
-```text
-Mean
-```
-
-**Hourly**
-
-```text
-Mean
-```
-
-**Daily**
-
-```text
-Mean
-Minimum
-Maximum
-```
-
-This applies to supported temperature measurements such as SHT, BMP/BMX, MCP, soil temperature, and grass temperature where configured.
-
-## Relative Humidity
-
-**15-minute:** mean
-**Hourly:** mean
-**Daily:** mean, minimum, maximum
-
-## Atmospheric Pressure
-
-Station pressure and mean sea level pressure use:
-
-**15-minute:** mean
-**Hourly:** mean
-**Daily:** mean, minimum, maximum
-
-## Wet Bulb Temperature
-
-WBT is summarized using the maximum value for each period:
-
-```text
-Maximum
-```
-
-## Wet Bulb Globe Temperature
-
-WBGT is also summarized using:
-
-```text
-Maximum
-```
-
----
-
-# Wind
-
-Wind direction requires circular rather than arithmetic averaging.
-
-For example, the arithmetic mean of:
-
-```text
-359°
-1°
-```
-
-would incorrectly produce approximately:
-
-```text
-180°
-```
-
-The summarizer instead calculates a circular mean, correctly producing a direction near:
-
-```text
-0° / North
-```
-
-Wind-direction summaries include both degrees and a compass direction.
-
-Wind speed includes:
-
-```text
-Mean
-Maximum
-```
-
-Wind gust includes:
-
-```text
-Mean
-Maximum
-```
-
-The direction associated with the maximum gust is taken from the same source observation as the maximum gust.
-
-This produces outputs such as:
-
-```text
-Wind Gust Maximum (m/s)
-Maximum Wind Gust Direction (deg)
-Maximum Wind Gust Direction (Compass)
-```
-
----
-
-# Precipitation
-
-The summarizer supports both single- and dual-rain-gauge stations.
-
-Incremental rain measurements are summed within each summary period.
-
-For example:
-
-```text
-Rain Gauge 1 Sum (mm H2O)
-```
-
-When cumulative rain counters are available, the summarizer independently calculates the change in the cumulative counter.
-
-This allows the incremental and cumulative measurements to be compared.
-
-Outputs can include:
-
-```text
-Rain Gauge 1 Sum
-Rain Gauge 1 Cumulative Rain Total
-Rain Gauge 1 Cumulative Total Change
-Rain Gauge 1 Sum vs Cumulative Change Difference
-```
-
-## Cumulative Counter Resets
-
-Cumulative rain counters can reset.
-
-When the cumulative value decreases, the summarizer interprets the new cumulative value as rainfall accumulated after a counter reset rather than treating the decrease as negative rainfall.
-
-## Dual Rain Gauges
-
-Stations with two gauges additionally include comparisons between the gauges.
-
-For example:
-
-```text
-Rain Gauge 1 Sum
-Rain Gauge 2 Sum
-Rain Gauge 1 vs 2 Difference
-```
-
-The difference is calculated as:
-
-```text
-Rain Gauge 1 - Rain Gauge 2
-```
-
-Similar comparisons are made between the cumulative rain measurements when available.
-
-These comparisons can help identify disagreement between redundant precipitation sensors.
-
----
-
-# Regional QC Profiles
-
-Regional profiles are JSON files named:
-
-```text
-summary_config_<profile>.json
-```
-
-For example:
-
-```text
-summary_config_nadi.json
-summary_config_addis.json
-summary_config_adama.json
-summary_config_nairobi.json
-```
-
-Each profile defines:
-
-* accepted source-column names
-* internal variable mapping
-* display names
-* units
-* measurement type
-* QC enable/disable settings
-* acceptable ranges
-* temporal QC parameters
-* summary inclusion
-* completeness inclusion
-* aggregation statistics
-
-A new regional profile can be created by copying an existing configuration and adjusting its environmental QC limits as appropriate.
-
----
-
-# Variable Mapping
-
-CHORDS variable names have changed across different versions of 3D-PAWS firmware and station configurations.
-
-The summarizer uses aliases in the configuration files to map these different names to common internal variables.
-
-For example:
-
-```json
-"mt1": {
-  "display_name": "MCP Temperature",
-  "source_columns": [
-    "MCP9808 Temperature (degC)",
-    "MCP Temperature 1 (degC)"
-  ]
-}
-```
-
-Both source columns are therefore treated as the same type of measurement.
-
-This approach allows older FEWS NET stations and newer 3D-PAWS stations to use the same summarization software.
-
----
-
-# Console Output
-
-While processing a file, the summarizer reports information including:
-
-```text
-Expected observation interval
-Missing-observation gap threshold
-Inferred missing observations
-QC profile
-Mapped CHORDS variables
-Configured variables not present
-Unmapped source columns
-QC values removed
-Temporal spikes/dips removed
-Source observation count
-Observation period
-Generated output files
-```
-
-The mapping output is particularly useful when processing a station configuration for the first time.
-
-Unexpected entries under:
-
-```text
-Unmapped source columns
-```
-
-may indicate that an additional source-column alias should be added to the configuration.
-
----
-
-# Design Philosophy
-
-The CHORDS Data Summarizer is intended as a practical first-pass processing and quality-control tool for operational environmental monitoring data.
-
-It is designed to:
-
-* preserve valid observations,
-* identify obvious sensor errors,
-* handle different station configurations,
-* make data gaps visible,
-* produce meteorologically meaningful summary statistics, and
-* avoid silently making assumptions about station behavior.
-
-QC thresholds are configurable and should be reviewed for the environment and station network in which they are used.
-
-The output should not be interpreted as a replacement for network-specific climatological QC or expert review.
-
----
-
-# Known Limitations
-
-The expected observation interval currently applies to the entire input file.
-
-If a station's configured measurement interval changed historically—for example, from 15-minute to 1-minute observations—the file should be processed with consideration of the appropriate configuration periods.
-
-The first cumulative precipitation observation in a file cannot determine how much rainfall occurred between that observation and an observation preceding the beginning of the file.
-
-Sensor availability and variable naming can differ between station generations. New aliases may occasionally need to be added to a configuration profile.
-
-QC thresholds are regional engineering thresholds and are not intended to represent official WMO climatological limits.
-
----
-
-# Possible Future Improvements
-
-Potential future enhancements include:
-
-* Persistence or stuck-sensor detection
-* Identification of measurements that remain exactly zero for extended periods
-* Identification of measurements that remain unchanged for a configurable period
-* Report-only QC flags in addition to removing invalid measurements
-* Explicit support for historical changes in station observation cadence
-* Additional regional QC profiles
-* Additional environmental sensors
-* Expanded QC reporting and diagnostics
-
-Persistence/stuck-value detection would initially be most useful as a **diagnostic flag rather than an automatic data-removal rule**, since some measurements can legitimately remain constant for extended periods.
-
----
-
-# Status
-
-The summarizer has been tested with:
-
-* 1-minute station observations
-* 15-minute station observations
-* timestamp jitter
-* missing observations and communications gaps
-* standard 3D-PAWS stations
-* legacy FEWS NET station variable names
-* full weather-station configurations
-* sparse sensor configurations
-* single and dual rain gauges
-* wind speed, direction, gust, and gust direction
-* soil and grass temperature sensors
-* missing/sentinel sensor values
-* environmental range QC
-* temporal spike/dip QC
-* regional QC profiles
-* observation and variable completeness calculations
-
-The tool is currently intended for operational testing and continued development.
+Tools for downloading 3D-PAWS observations from CHORDS are available separately in the [3D-PAWS GitHub organization](https://github.com/3d-paws).
