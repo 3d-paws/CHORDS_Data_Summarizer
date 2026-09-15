@@ -194,9 +194,8 @@ They are maintained separately so that either tool can be used independently. Th
 
 ## Documentation
 
-More detailed information about completeness calculations, QC algorithms, wind processing, precipitation handling, and configuration profiles is available in:
-
-**[Technical Details](docs/TECHNICAL_DETAILS.md)**
+- [Configuration Guide](docs/CONFIGURATION.md) — Create or modify regional QC profiles and variable mappings.
+- [Technical Details](docs/TECHNICAL_DETAILS.md) — Processing logic, completeness calculations, QC algorithms, wind, and precipitation handling.
 
 ## Known Limitations
 

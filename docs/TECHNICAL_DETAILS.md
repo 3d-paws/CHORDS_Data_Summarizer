@@ -24,6 +24,8 @@ An important distinction is maintained between a **missing observation** and a *
 
 A missing observation affects station-level observation completeness. A measurement rejected by QC affects the completeness of that variable but does not cause the entire observation to be considered missing.
 
+For information about creating or modifying regional QC profiles, variable mappings, QC limits, and summary settings, see the [Configuration Guide](CONFIGURATION.md).
+
 ---
 
 ## Variable Configuration
