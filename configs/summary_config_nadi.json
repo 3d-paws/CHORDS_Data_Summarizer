@@ -1,0 +1,617 @@
+{
+  "_meta": {
+    "profile_name": "Nadi, Fiji",
+    "description": "3D-PAWS CHORDS summary and QC configuration for Nadi, Fiji",
+    "missing_value_threshold": -900
+  },
+
+  "variables": {
+    "st1": {
+      "display_name": "SHT31D Temperature",
+      "unit": "degC",
+      "source_columns": [
+        "SHT31D Temperature (degC)"
+      ],
+      "type": "measurement",
+      "qc_enabled": true,
+      "temporal_qc_enabled": true,
+      "include_in_summary": true,
+      "include_completeness": true,
+      "min": 10,
+      "max": 45,
+      "spike_threshold": 3.0,
+      "neighbor_tolerance": 1.5,
+      "max_rate_change_per_minute": 3.0,
+      "spike_max_neighbor_gap_seconds": 1200,
+      "statistics": {
+        "15min": ["mean"],
+        "hourly": ["mean"],
+        "daily": ["mean", "min", "max"]
+      }
+    },
+
+    "sh1": {
+      "display_name": "SHT31D Relative Humidity",
+      "unit": "%",
+      "source_columns": [
+        "SHT31D Relative Humidity (%)",
+        "SHT31D Humidity (%)"
+      ],
+      "type": "measurement",
+      "qc_enabled": true,
+      "temporal_qc_enabled": true,
+      "include_in_summary": true,
+      "include_completeness": true,
+      "min": 10,
+      "max": 100,
+      "spike_threshold": 15,
+      "neighbor_tolerance": 7.5,
+      "max_rate_change_per_minute": 15,
+      "spike_max_neighbor_gap_seconds": 1200,
+      "statistics": {
+        "15min": ["mean"],
+        "hourly": ["mean"],
+        "daily": ["mean", "min", "max"]
+      }
+    },
+
+    "bt1": {
+      "display_name": "BMP390 Temperature",
+      "unit": "degC",
+      "source_columns": [
+        "BMP390 Temperature (degC)"
+      ],
+      "type": "measurement",
+      "qc_enabled": true,
+      "temporal_qc_enabled": true,
+      "include_in_summary": true,
+      "include_completeness": true,
+      "min": 5,
+      "max": 60,
+      "spike_threshold": 4.0,
+      "neighbor_tolerance": 2.0,
+      "max_rate_change_per_minute": 4.0,
+      "spike_max_neighbor_gap_seconds": 1200,
+      "statistics": {
+        "15min": ["mean"],
+        "hourly": ["mean"],
+        "daily": ["mean", "min", "max"]
+      }
+    },
+
+    "bp1": {
+      "display_name": "BMP390 Pressure",
+      "unit": "hPa",
+      "source_columns": [
+        "BMP390 Pressure (hPa)",
+        "BMP390 Pressure (mbar)"
+      ],
+      "type": "measurement",
+      "qc_enabled": true,
+      "temporal_qc_enabled": true,
+      "include_in_summary": true,
+      "include_completeness": true,
+      "min": 880,
+      "max": 1070,
+      "spike_threshold": 2.0,
+      "neighbor_tolerance": 1.0,
+      "max_rate_change_per_minute": 2.0,
+      "spike_max_neighbor_gap_seconds": 1200,
+      "statistics": {
+        "15min": ["mean"],
+        "hourly": ["mean"],
+        "daily": ["mean", "min", "max"]
+      }
+    },
+
+    "mt1": {
+      "display_name": "MCP9808 Temperature",
+      "unit": "degC",
+      "source_columns": [
+        "MCP9808 Temperature (degC)"
+      ],
+      "type": "measurement",
+      "qc_enabled": true,
+      "temporal_qc_enabled": true,
+      "include_in_summary": true,
+      "include_completeness": true,
+      "min": 10,
+      "max": 45,
+      "spike_threshold": 3.0,
+      "neighbor_tolerance": 1.5,
+      "max_rate_change_per_minute": 3.0,
+      "spike_max_neighbor_gap_seconds": 1200,
+      "statistics": {
+        "15min": ["mean"],
+        "hourly": ["mean"],
+        "daily": ["mean", "min", "max"]
+      }
+    },
+
+    "gt1": {
+      "display_name": "MCP9808 Globe Temperature",
+      "unit": "degC",
+      "source_columns": [
+        "MCP9808 Globe Temperature (degC)"
+      ],
+      "type": "measurement",
+      "qc_enabled": true,
+      "temporal_qc_enabled": true,
+      "include_in_summary": false,
+      "include_completeness": false,
+      "min": 5,
+      "max": 60,
+      "spike_threshold": 5.0,
+      "neighbor_tolerance": 2.5,
+      "max_rate_change_per_minute": 5.0,
+      "spike_max_neighbor_gap_seconds": 1200
+    },
+
+    "hi": {
+      "display_name": "Heat Index",
+      "unit": "degC",
+      "source_columns": [
+        "SHT31 Heat Index Temperature (degC)",
+        "Heat Index Temperature (degC)"
+      ],
+      "type": "derived",
+      "qc_enabled": true,
+      "temporal_qc_enabled": true,
+      "include_in_summary": false,
+      "include_completeness": false,
+      "min": 5,
+      "max": 60,
+      "spike_threshold": 4.0,
+      "neighbor_tolerance": 2.0,
+      "max_rate_change_per_minute": 4.0,
+      "spike_max_neighbor_gap_seconds": 1200
+    },
+
+    "wbt": {
+      "display_name": "Wet Bulb Temperature",
+      "unit": "degC",
+      "source_columns": [
+        "Wet Bulb Temperature (degC)",
+        "MCP9808 & SHT31 Wet Bulb Temperature (degC)"
+      ],
+      "type": "derived",
+      "qc_enabled": true,
+      "temporal_qc_enabled": true,
+      "include_in_summary": true,
+      "include_completeness": false,
+      "min": 5,
+      "max": 40,
+      "spike_threshold": 3.0,
+      "neighbor_tolerance": 1.5,
+      "max_rate_change_per_minute": 3.0,
+      "spike_max_neighbor_gap_seconds": 1200,
+      "statistics": {
+        "15min": ["max"],
+        "hourly": ["max"],
+        "daily": ["max"]
+      }
+    },
+
+    "wbgt": {
+      "display_name": "Wet Bulb Globe Temperature",
+      "unit": "degC",
+      "source_columns": [
+        "Wet Bulb Globe Temperature (degC)",
+        "MCP9808 & SHT31 Wet Bulb Globe Temperature (degC)"
+      ],
+      "type": "derived",
+      "qc_enabled": true,
+      "temporal_qc_enabled": true,
+      "include_in_summary": true,
+      "include_completeness": false,
+      "min": 5,
+      "max": 50,
+      "spike_threshold": 5.0,
+      "neighbor_tolerance": 2.5,
+      "max_rate_change_per_minute": 5.0,
+      "spike_max_neighbor_gap_seconds": 1200,
+      "statistics": {
+        "15min": ["max"],
+        "hourly": ["max"],
+        "daily": ["max"]
+      }
+    },
+
+    "mslp": {
+      "display_name": "Mean Sea Level Pressure",
+      "unit": "hPa",
+      "source_columns": [
+        "Mean Sea Level Pressure (hPa)",
+        "Mean Sea Level Pressure (mbar)"
+      ],
+      "type": "derived",
+      "qc_enabled": true,
+      "temporal_qc_enabled": true,
+      "include_in_summary": true,
+      "include_completeness": false,
+      "min": 880,
+      "max": 1070,
+      "spike_threshold": 2.0,
+      "neighbor_tolerance": 1.0,
+      "max_rate_change_per_minute": 2.0,
+      "spike_max_neighbor_gap_seconds": 1200,
+      "statistics": {
+        "15min": ["mean"],
+        "hourly": ["mean"],
+        "daily": ["mean", "min", "max"]
+      }
+    },
+
+    "ws": {
+      "display_name": "Wind Speed",
+      "unit": "m/s",
+      "source_columns": [
+        "Wind Speed (m/s)"
+      ],
+      "type": "wind_speed",
+      "qc_enabled": true,
+      "temporal_qc_enabled": false,
+      "include_in_summary": true,
+      "include_completeness": true,
+      "min": 0,
+      "max": 80,
+      "statistics": {
+        "15min": ["mean", "max"],
+        "hourly": ["mean", "max"],
+        "daily": ["mean", "max"]
+      }
+    },
+
+    "wd": {
+      "display_name": "Wind Direction",
+      "unit": "deg",
+      "source_columns": [
+        "Wind Direction (deg)"
+      ],
+      "type": "wind_direction",
+      "qc_enabled": true,
+      "temporal_qc_enabled": false,
+      "include_in_summary": true,
+      "include_completeness": true,
+      "min": 0,
+      "max": 360,
+      "statistics": {
+        "15min": ["circular_mean", "compass"],
+        "hourly": ["circular_mean", "compass"],
+        "daily": ["circular_mean", "compass"]
+      }
+    },
+
+    "wg": {
+      "display_name": "Wind Gust",
+      "unit": "m/s",
+      "source_columns": [
+        "Wind Gust (m/s)"
+      ],
+      "type": "wind_gust",
+      "qc_enabled": true,
+      "temporal_qc_enabled": false,
+      "include_in_summary": true,
+      "include_completeness": true,
+      "min": 0,
+      "max": 100,
+      "statistics": {
+        "15min": ["mean", "max", "max_gust_direction"],
+        "hourly": ["mean", "max", "max_gust_direction"],
+        "daily": ["mean", "max", "max_gust_direction"]
+      }
+    },
+
+    "wgd": {
+      "display_name": "Wind Gust Direction",
+      "unit": "deg",
+      "source_columns": [
+        "Wind Gust Direction (deg)"
+      ],
+      "type": "gust_direction",
+      "qc_enabled": true,
+      "temporal_qc_enabled": false,
+      "include_in_summary": false,
+      "include_completeness": true,
+      "min": 0,
+      "max": 360
+    },
+
+    "rg": {
+      "display_name": "Rain Gauge 1",
+      "unit": "mm H2O",
+      "source_columns": [
+        "Rain Gauge (mm H2O)",
+        "Rain Gauge 1 (mm H2O)"
+      ],
+      "type": "rain_increment",
+      "qc_enabled": true,
+      "temporal_qc_enabled": false,
+      "include_in_summary": true,
+      "include_completeness": true,
+      "min": 0,
+      "max": 50,
+      "statistics": {
+        "15min": ["sum"],
+        "hourly": ["sum"],
+        "daily": ["sum"]
+      }
+    },
+
+    "rgt": {
+      "display_name": "Rain Gauge 1",
+      "unit": "mm H2O",
+      "source_columns": [
+        "Rain Gauge Total (mm H2O)",
+        "Rain Gauge 1 Total (mm H2O)"
+      ],
+      "type": "rain_total",
+      "qc_enabled": true,
+      "temporal_qc_enabled": false,
+      "include_in_summary": true,
+      "include_completeness": false,
+      "min": 0,
+      "max": 1000
+    },
+
+    "rgp": {
+      "display_name": "Rain Gauge 1 Prior Day Total",
+      "unit": "mm H2O",
+      "source_columns": [
+        "Rain Gauge Day Prior (mm H2O)",
+        "Rain Gauge 1 Day Prior Total (mm H2O)"
+      ],
+      "type": "rain_prior",
+      "qc_enabled": true,
+      "temporal_qc_enabled": false,
+      "include_in_summary": false,
+      "include_completeness": false,
+      "min": 0,
+      "max": 1000
+    },
+
+    "rg2": {
+      "display_name": "Rain Gauge 2",
+      "unit": "mm H2O",
+      "source_columns": [
+        "Rain Gauge 2 (mm H2O)"
+      ],
+      "type": "rain_increment",
+      "qc_enabled": true,
+      "temporal_qc_enabled": false,
+      "include_in_summary": true,
+      "include_completeness": true,
+      "min": 0,
+      "max": 50,
+      "statistics": {
+        "15min": ["sum"],
+        "hourly": ["sum"],
+        "daily": ["sum"]
+      }
+    },
+
+    "rgt2": {
+      "display_name": "Rain Gauge 2",
+      "unit": "mm H2O",
+      "source_columns": [
+        "Rain Gauge 2 Total (mm H2O)"
+      ],
+      "type": "rain_total",
+      "qc_enabled": true,
+      "temporal_qc_enabled": false,
+      "include_in_summary": true,
+      "include_completeness": false,
+      "min": 0,
+      "max": 1000
+    },
+
+    "rgp2": {
+      "display_name": "Rain Gauge 2 Prior Day Total",
+      "unit": "mm H2O",
+      "source_columns": [
+        "Rain Gauge 2 Prior Day Total (mm H2O)"
+      ],
+      "type": "rain_prior",
+      "qc_enabled": true,
+      "temporal_qc_enabled": false,
+      "include_in_summary": false,
+      "include_completeness": false,
+      "min": 0,
+      "max": 1000
+    },
+
+    "grass_temp": {
+      "display_name": "Grass Minimum Temperature",
+      "unit": "degC",
+      "source_columns": [
+        "Grass Minimum Temperature (degC)"
+      ],
+      "type": "grass_temperature",
+      "qc_enabled": true,
+      "temporal_qc_enabled": true,
+      "include_in_summary": true,
+      "include_completeness": false,
+      "min": 5,
+      "max": 45,
+      "spike_threshold": 5.0,
+      "neighbor_tolerance": 2.0,
+      "max_rate_change_per_minute": 5.0,
+      "spike_max_neighbor_gap_seconds": 1200,
+      "statistics": {
+        "15min": ["mean"],
+        "hourly": ["mean"],
+        "daily": ["mean", "min", "max"]
+      }
+    },
+
+    "soil20": {
+      "display_name": "Soil Temperature 20",
+      "unit": "degC",
+      "source_columns": [
+        "SoilTemp20 (degC)"
+      ],
+      "type": "soil_temperature",
+      "qc_enabled": true,
+      "temporal_qc_enabled": true,
+      "include_in_summary": true,
+      "include_completeness": false,
+      "min": 10,
+      "max": 50,
+      "spike_threshold": 1.0,
+      "neighbor_tolerance": 0.5,
+      "max_rate_change_per_minute": 1.0,
+      "spike_max_neighbor_gap_seconds": 1200,
+      "statistics": {
+        "15min": ["mean"],
+        "hourly": ["mean"],
+        "daily": ["mean", "min", "max"]
+      }
+    },
+
+    "soil30": {
+      "display_name": "Soil Temperature 30",
+      "unit": "degC",
+      "source_columns": [
+        "SoilTemp30 (degC)"
+      ],
+      "type": "soil_temperature",
+      "qc_enabled": true,
+      "temporal_qc_enabled": true,
+      "include_in_summary": true,
+      "include_completeness": false,
+      "min": 10,
+      "max": 50,
+      "spike_threshold": 0.75,
+      "neighbor_tolerance": 0.4,
+      "max_rate_change_per_minute": 0.75,
+      "spike_max_neighbor_gap_seconds": 1200,
+      "statistics": {
+        "15min": ["mean"],
+        "hourly": ["mean"],
+        "daily": ["mean", "min", "max"]
+      }
+    },
+
+    "soil40": {
+      "display_name": "Soil Temperature 40",
+      "unit": "degC",
+      "source_columns": [
+        "SoilTemp40 (degC)"
+      ],
+      "type": "soil_temperature",
+      "qc_enabled": true,
+      "temporal_qc_enabled": true,
+      "include_in_summary": true,
+      "include_completeness": false,
+      "min": 10,
+      "max": 50,
+      "spike_threshold": 0.5,
+      "neighbor_tolerance": 0.3,
+      "max_rate_change_per_minute": 0.5,
+      "spike_max_neighbor_gap_seconds": 1200,
+      "statistics": {
+        "15min": ["mean"],
+        "hourly": ["mean"],
+        "daily": ["mean", "min", "max"]
+      }
+    },
+
+    "soil50": {
+      "display_name": "Soil Temperature 50",
+      "unit": "degC",
+      "source_columns": [
+        "SoilTemp50 (degC)"
+      ],
+      "type": "soil_temperature",
+      "qc_enabled": true,
+      "temporal_qc_enabled": true,
+      "include_in_summary": true,
+      "include_completeness": false,
+      "min": 10,
+      "max": 50,
+      "spike_threshold": 0.5,
+      "neighbor_tolerance": 0.3,
+      "max_rate_change_per_minute": 0.5,
+      "spike_max_neighbor_gap_seconds": 1200,
+      "statistics": {
+        "15min": ["mean"],
+        "hourly": ["mean"],
+        "daily": ["mean", "min", "max"]
+      }
+    },
+
+    "hth": {
+      "display_name": "Health Bit",
+      "unit": "#",
+      "source_columns": [
+        "Health Bit (#)",
+        "Health Bit Code (#)"
+      ],
+      "type": "status",
+      "qc_enabled": false,
+      "temporal_qc_enabled": false,
+      "include_in_summary": false,
+      "include_completeness": false
+    },
+
+    "css": {
+      "display_name": "Cellular Signal Strength",
+      "unit": "%",
+      "source_columns": [
+        "Cellular Signal Strength (%)",
+        "Cell Signal Strength (%)"
+      ],
+      "type": "system",
+      "qc_enabled": true,
+      "temporal_qc_enabled": false,
+      "include_in_summary": false,
+      "include_completeness": false,
+      "min": 0,
+      "max": 100
+    },
+
+    "bcs": {
+      "display_name": "Battery Charge Status",
+      "unit": "#",
+      "source_columns": [
+        "Battery Charge Status (#)",
+        "Battery Charger Status (#)"
+      ],
+      "type": "status",
+      "qc_enabled": false,
+      "temporal_qc_enabled": false,
+      "include_in_summary": false,
+      "include_completeness": false
+    },
+
+    "bpc": {
+      "display_name": "Battery Percent Charge",
+      "unit": "%",
+      "source_columns": [
+        "Battery Percent Charge (%)"
+      ],
+      "type": "system",
+      "qc_enabled": true,
+      "temporal_qc_enabled": false,
+      "include_in_summary": false,
+      "include_completeness": false,
+      "min": 0,
+      "max": 100
+    },
+
+    "battery_voltage": {
+      "display_name": "Voltaic Battery Voltage",
+      "unit": "V",
+      "source_columns": [
+        "Voltaic Battery Voltage (V)"
+      ],
+      "type": "system",
+      "qc_enabled": true,
+      "temporal_qc_enabled": false,
+      "include_in_summary": false,
+      "include_completeness": false,
+      "min": 0,
+      "max": 20
+    }
+  }
+}
