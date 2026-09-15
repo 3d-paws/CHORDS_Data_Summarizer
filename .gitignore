@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+
+# Local configuration
+summary.env
+.env
+
+# Generated data
+*.csv
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
