@@ -1,66 +1,91 @@
 # CHORDS Data Summarizer
 
-A Python tool for creating quality-controlled meteorological summaries from observational data exported from CHORDS.
+The **CHORDS Data Summarizer** is a Python tool for creating quality-controlled meteorological summaries from observational data exported from a CHORDS portal.
 
-The CHORDS Data Summarizer is designed primarily for **3D-PAWS weather stations** and related environmental monitoring networks. It converts CHORDS CSV observations into standardized **15-minute, hourly, and daily summaries** while applying configurable quality-control checks and evaluating data completeness.
+It was developed primarily for **3D-PAWS (3D-Printed Automatic Weather Station)** networks and supports both current and legacy 3D-PAWS / FEWS NET station data.
 
-This tool was developed as a companion to the [CHORDS Data Downloader](https://github.com/3d-paws/CHORDS_Data_Downloader).
+The summarizer:
 
-## Features
+- Applies configurable quality control
+- Identifies missing observations and calculates data completeness
+- Produces 15-minute, hourly, and daily summaries
+- Handles meteorological processing for temperature, humidity, pressure, wind, precipitation, soil temperature, WBT, WBGT, and other supported measurements
+- Supports regional QC profiles and multiple generations of 3D-PAWS variable names
 
-- 15-minute, hourly, and daily meteorological summaries
-- Configurable regional quality-control profiles
-- Observation and variable-level completeness
-- Missing/sentinel value and environmental range QC
-- Temporal spike/dip QC
-- Circular wind-direction averaging
-- Maximum wind gust and corresponding gust direction
-- Incremental and cumulative precipitation comparisons
-- Single and dual rain gauge support
-- Soil and grass temperature support
-- Wet Bulb Temperature (WBT) and Wet Bulb Globe Temperature (WBGT)
-- Support for current and legacy 3D-PAWS variable names
-- Configurable observation intervals, including 1-minute and 15-minute stations
+It is developed as a companion to the [CHORDS Data Downloader](https://github.com/3d-paws/CHORDS_Data_Downloader), but either tool can be used independently.
 
-Stations do not need to contain every supported measurement. Variables that are not present in the source data are omitted from the resulting summaries.
+---
 
-## Installation
+## Quick Start
 
-Clone the repository:
+The summarizer requires Python and the packages listed in `requirements.txt`.
 
-```bash
-git clone https://github.com/3d-paws/CHORDS_Data_Summarizer.git
-cd CHORDS_Data_Summarizer
+### Windows
+
+Open **PowerShell** and navigate to the downloaded or cloned repository.
+
+Create a Python 3.10 virtual environment:
+
+```powershell
+py -3.10 -m venv .venv
 ```
 
-Create and activate a Python virtual environment:
+Activate it:
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-```
-
-On Windows:
-
-```bash
-.venv\Scripts\activate
+```powershell
+.\.venv\Scripts\Activate.ps1
 ```
 
 Install the required packages:
 
-```bash
+```powershell
+python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-## Configuration
+Create your local configuration file:
 
-Copy the example environment file:
+```powershell
+Copy-Item ".\summary.env.example" ".\summary.env"
+```
+
+Open it for editing:
+
+```powershell
+notepad summary.env
+```
+
+Then run the summarizer:
+
+```powershell
+python summarize_chords.py "C:\path\to\station_data.csv"
+```
+
+> If Python 3.10 is not installed or PowerShell prevents virtual environment activation, see the [Installation Guide](docs/INSTALLATION.md).
+
+### macOS / Linux
+
+From the repository directory:
 
 ```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -r requirements.txt
 cp summary.env.example summary.env
 ```
 
-Then edit `summary.env` for the station being processed.
+Edit `summary.env`, then run:
+
+```bash
+python summarize_chords.py /path/to/station_data.csv
+```
+
+---
+
+## Configure the Summarizer
+
+The local `summary.env` file controls the output location, regional QC profile, and expected station observation cadence.
 
 For a 1-minute station:
 
@@ -80,132 +105,130 @@ EXPECTED_INTERVAL_SECONDS=900
 GAP_THRESHOLD_SECONDS=1800
 ```
 
-### Configuration Options
+On Windows, an output path can be written as:
 
-- **`OUTPUT_PATH`** — Directory where summary files will be saved.
-- **`QC_PROFILE`** — Regional QC configuration to use.
-- **`EXPECTED_INTERVAL_SECONDS`** — Expected time between station observations.
-- **`GAP_THRESHOLD_SECONDS`** — Gap required before missing observations are inferred.
-
-The expected observation interval is explicitly configured so that communications outages, stored observations, and later data backfills are not mistaken for changes in station measurement cadence.
-
-## Regional QC Profiles
-
-Regional QC profiles are stored in the `configs/` directory.
-
-Current profiles include:
-
-| Profile | Region |
-| --- | --- |
-| `nadi` | Nadi, Fiji |
-| `addis` | Addis Ababa, Ethiopia |
-| `adama` | Adama, Ethiopia |
-| `nairobi` | Nairobi, Kenya |
-
-Profiles define variable mappings, environmental QC ranges, temporal QC settings, summary statistics, and other variable-specific behavior.
-
-## Usage
-
-Run the summarizer with a CHORDS CSV file:
-
-```bash
-python summarize_chords.py /path/to/station_data.csv
+```text
+OUTPUT_PATH=C:/Users/username/Documents/CHORDS/Summaries
 ```
 
-For example:
+Regional QC profiles are stored in:
 
-```bash
-python summarize_chords.py /Users/username/Documents/CHORDS/station_data.csv
+```text
+configs/
 ```
 
-The input CSV must contain a CHORDS timestamp column named `Time`.
+For information about selecting, modifying, or creating a profile, see the [Configuration Guide](docs/CONFIGURATION.md).
 
-During processing, the script reports variable mappings, missing observations, QC results, unmapped columns, and generated output files.
+---
 
 ## Output
 
-Each input file produces:
+For an input file such as:
 
 ```text
-<filename>_15min.csv
-<filename>_hourly.csv
-<filename>_daily.csv
+station_data.csv
 ```
 
-Depending on the station configuration, summaries can include:
+the summarizer creates:
 
-- Temperature, relative humidity, and pressure
-- Wind speed, direction, gust, and gust direction
-- Incremental and cumulative precipitation
-- Dual rain gauge comparisons
-- Soil and grass temperature
-- WBT and WBGT
-- Observation completeness
-- Individual variable completeness
+```text
+station_data_15min.csv
+station_data_hourly.csv
+station_data_daily.csv
+```
 
-## Quality Control
+in the directory specified by `OUTPUT_PATH`.
 
-Quality control is applied before summary statistics are calculated.
+---
 
-The summarizer currently supports:
+## Running It Again
 
-- Missing and sentinel value detection
-- Configurable environmental range checks
-- Temporal spike/dip detection
+The virtual environment and dependencies only need to be created once.
 
-Regional QC limits are intended as practical **first-pass engineering QC** and are not a replacement for network-specific climatological QC or expert review.
+### Windows
 
-## Observation Completeness
+```powershell
+cd C:\path\to\CHORDS_Data_Summarizer
+.\.venv\Scripts\Activate.ps1
+notepad summary.env
+python summarize_chords.py "C:\path\to\station_data.csv"
+```
 
-Each summary period includes:
+### macOS / Linux
 
-- **Observation Count**
-- **Estimated Missed Observations**
-- **Observation Completeness (%)**
+```bash
+cd /path/to/CHORDS_Data_Summarizer
+source .venv/bin/activate
+python summarize_chords.py /path/to/station_data.csv
+```
 
-Individual variables can also report their own completeness. This helps distinguish between a station-level data gap and a problem affecting an individual sensor.
+If your configuration has not changed, you do not need to edit `summary.env` before every run.
 
-## Meteorological Processing
-
-The summarizer uses measurement-appropriate aggregation methods, including:
-
-- Mean temperature, humidity, and pressure
-- Daily minimum and maximum values
-- Circular averaging of wind direction
-- Mean and maximum wind speed and gust
-- Wind direction corresponding to the maximum gust
-- Maximum WBT and WBGT
-- Summed incremental precipitation
-- Reset-aware cumulative precipitation changes
-- Comparisons between redundant rain gauges
-
-For details about these calculations and QC methods, see [Technical Details](docs/TECHNICAL_DETAILS.md).
-
-## Relationship to the CHORDS Data Downloader
-
-The CHORDS Data Summarizer was developed as a companion to the [CHORDS Data Downloader](https://github.com/3d-paws/CHORDS_Data_Downloader).
-
-The two tools serve different parts of the workflow:
-
-- **CHORDS Data Downloader** — retrieves observational data from CHORDS portals and exports it to CSV.
-- **CHORDS Data Summarizer** — processes compatible CHORDS CSV files into quality-controlled meteorological summaries.
-
-They are maintained separately so that either tool can be used independently. The summarizer can process compatible CHORDS CSV files regardless of how they were obtained.
+---
 
 ## Documentation
 
-- [Configuration Guide](docs/CONFIGURATION.md) — Create or modify regional QC profiles and variable mappings.
-- [Technical Details](docs/TECHNICAL_DETAILS.md) — Processing logic, completeness calculations, QC algorithms, wind, and precipitation handling.
+Additional documentation is available in the [`docs/`](docs/) directory.
 
-## Known Limitations
+### [Installation Guide](docs/INSTALLATION.md)
 
-- The configured observation interval currently applies to the entire input file.
-- The first cumulative precipitation observation cannot determine rainfall that occurred before the beginning of the file.
-- New station configurations may require additional CHORDS column aliases.
-- Regional QC limits should be reviewed before applying a profile to substantially different environmental conditions.
-- Persistence/stuck-sensor QC is not currently implemented.
+Detailed setup instructions for Windows, macOS, and Linux, including Python installation, virtual environments, PowerShell configuration, and troubleshooting.
+
+### [Configuration Guide](docs/CONFIGURATION.md)
+
+Reference for the JSON regional profiles, including:
+
+- Variable mappings and aliases
+- QC ranges
+- Temporal QC settings
+- Summary inclusion
+- Completeness settings
+- Aggregation statistics
+- Creating profiles for new regions or station configurations
+
+### [Technical Details](docs/TECHNICAL_DETAILS.md)
+
+Detailed explanation of how the summarizer processes data, including:
+
+- Missing observation detection
+- Observation and variable completeness
+- Sentinel and range QC
+- Temporal spike/dip QC
+- Wind direction and gust processing
+- Precipitation processing
+- Dual rain gauge comparisons
+- Meteorological aggregation
+
+---
+
+## Relationship to the CHORDS Data Downloader
+
+A typical 3D-PAWS workflow is:
+
+```text
+CHORDS Portal
+      ↓
+CHORDS Data Downloader
+      ↓
+CHORDS CSV
+      ↓
+CHORDS Data Summarizer
+      ↓
+15-Minute / Hourly / Daily Summary CSVs
+```
+
+The Downloader and Summarizer are maintained separately so that either can be used independently.
+
+---
 
 ## Related Projects
 
 - [CHORDS Data Downloader](https://github.com/3d-paws/CHORDS_Data_Downloader)
 - [3D-PAWS GitHub Organization](https://github.com/3d-paws)
+- [3D-PAWS Manual](https://3dpaws.comet.ucar.edu/)
+
+---
+
+## License
+
+See [LICENSE](LICENSE) for license information.
