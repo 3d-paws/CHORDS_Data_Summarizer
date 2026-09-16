@@ -2,7 +2,14 @@
 
 This guide explains how to install and run the **CHORDS Data Summarizer** on Windows, macOS, or Linux.
 
-The summarizer is a Python program that processes CHORDS CSV files and creates quality-controlled 15-minute, hourly, and daily meteorological summaries.
+The summarizer processes compatible CHORDS CSV files and creates:
+
+```text
+15-minute meteorological summaries
+hourly meteorological summaries
+daily meteorological summaries
+a QC report
+```
 
 GitHub Repository:
 
@@ -12,19 +19,19 @@ https://github.com/3d-paws/CHORDS_Data_Summarizer
 
 # Windows
 
-The recommended way to run the CHORDS Data Summarizer on Windows is using **Windows PowerShell** and Python 3.10.
+The recommended Windows workflow uses **Windows PowerShell** and Python 3.10.
 
 ## 1. Install Python
 
-Open **Windows PowerShell** and check which Python versions are installed:
+Open Windows PowerShell and check which Python versions are installed:
 
 ```powershell
 py --list
 ```
 
-Look for Python 3.10 in the list.
+Python 3.10 is recommended for consistency with the CHORDS Data Downloader.
 
-If Python 3.10 is not installed, install it with:
+If Python 3.10 is not installed:
 
 ```powershell
 winget install Python.Python.3.10
@@ -32,17 +39,15 @@ winget install Python.Python.3.10
 
 After installation, close and reopen PowerShell.
 
-Confirm that Python 3.10 is available:
+Confirm the installation:
 
 ```powershell
 py -3.10 --version
 ```
 
-You should see a Python 3.10 version reported.
-
 ---
 
-## 2. Download the CHORDS Data Summarizer
+## 2. Download the Repository
 
 Go to:
 
@@ -52,7 +57,7 @@ Select:
 
 **Code → Download ZIP**
 
-Extract the ZIP file to a convenient location, such as your Documents folder.
+Extract the ZIP file to a convenient location.
 
 For example:
 
@@ -66,19 +71,12 @@ Open PowerShell and navigate to the extracted repository:
 cd C:\Users\username\Documents\CHORDS\CHORDS_Data_Summarizer-main
 ```
 
-The exact path will depend on where you extracted the repository.
-
 ### Using Git Instead
 
-If Git is already installed, you can clone the repository instead:
+If Git is already installed:
 
 ```powershell
 git clone https://github.com/3d-paws/CHORDS_Data_Summarizer.git
-```
-
-Then enter the repository:
-
-```powershell
 cd CHORDS_Data_Summarizer
 ```
 
@@ -88,9 +86,7 @@ Git is not required to use the summarizer.
 
 ## 3. Create the Python Virtual Environment
 
-A Python virtual environment keeps the packages required by the summarizer separate from other Python software installed on the computer.
-
-From inside the CHORDS Data Summarizer directory, create the environment using Python 3.10:
+From inside the repository:
 
 ```powershell
 py -3.10 -m venv .venv
@@ -102,29 +98,19 @@ Activate it:
 .\.venv\Scripts\Activate.ps1
 ```
 
-After activation, the PowerShell prompt should begin with:
+The PowerShell prompt should now begin with:
 
 ```text
 (.venv)
 ```
 
-For example:
-
-```text
-(.venv) PS C:\Users\username\Documents\CHORDS\CHORDS_Data_Summarizer-main>
-```
-
 ### If PowerShell Blocks the Activation Script
-
-PowerShell may display an error stating that running scripts is disabled.
 
 Run:
 
 ```powershell
 Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
-
-Confirm the change if prompted.
 
 Then activate the environment again:
 
@@ -134,76 +120,58 @@ Then activate the environment again:
 
 ---
 
-## 4. Install the Required Python Packages
+## 4. Install the Required Packages
 
-Make sure `(.venv)` appears at the beginning of the PowerShell prompt.
+Make sure `(.venv)` is visible in the PowerShell prompt.
 
-Upgrade `pip`:
+Run:
 
 ```powershell
 python -m pip install --upgrade pip
-```
-
-Install the packages required by the summarizer:
-
-```powershell
 pip install -r requirements.txt
 ```
-
-The required packages are:
-
-- pandas
-- numpy
-- python-dotenv
 
 These installation steps only need to be completed once for this virtual environment.
 
 ---
 
-## 5. Create the Configuration File
+## 5. Create `summary.env`
 
-The repository includes an example configuration file:
+The repository includes:
 
 ```text
 summary.env.example
 ```
 
-The summarizer reads its local settings from a file named:
+Copy it to:
 
 ```text
 summary.env
 ```
 
-From the top-level repository directory, create it by running:
+using:
 
 ```powershell
 Copy-Item ".\summary.env.example" ".\summary.env"
 ```
 
-Confirm that the new file exists:
+Confirm that the file exists:
 
 ```powershell
 ls
-```
-
-You should see both:
-
-```text
-summary.env
-summary.env.example
 ```
 
 ---
 
 ## 6. Configure the Summarizer
 
-Open the configuration file in Notepad:
+Open the configuration file:
 
 ```powershell
 notepad summary.env
 ```
 
-A configuration for a 1-minute station might look like:
+A typical 1-minute configuration is:
 
 ```text
 OUTPUT_PATH=C:/Users/username/Documents/CHORDS/Summaries
@@ -212,31 +180,28 @@ EXPECTED_INTERVAL_SECONDS=60
 GAP_THRESHOLD_SECONDS=120
 ```
 
-For Windows paths in `summary.env`, forward slashes are recommended:
-
-```text
-C:/Users/username/Documents/CHORDS/Summaries
-```
-
-rather than:
-
-```text
-C:\Users\username\Documents\CHORDS\Summaries
-```
-
-### `OUTPUT_PATH`
-
-The folder where the generated summary CSV files will be saved.
-
-For example:
+For a 15-minute station:
 
 ```text
 OUTPUT_PATH=C:/Users/username/Documents/CHORDS/Summaries
+QC_PROFILE=nairobi
+EXPECTED_INTERVAL_SECONDS=900
+GAP_THRESHOLD_SECONDS=1800
 ```
+
+For Windows paths in `summary.env`, forward slashes are recommended.
+
+### `OUTPUT_PATH`
+
+Directory where generated CSV files will be saved.
 
 ### `QC_PROFILE`
 
-Selects the regional configuration profile.
+Selects the regional JSON profile from:
+
+```text
+configs/
+```
 
 For example:
 
@@ -250,73 +215,55 @@ loads:
 configs/summary_config_nadi.json
 ```
 
-Current profiles include:
-
-```text
-nadi
-addis
-adama
-nairobi
-```
-
-See the [Configuration Guide](CONFIGURATION.md) for information about these profiles and how to create or modify one.
-
 ### `EXPECTED_INTERVAL_SECONDS`
 
-The expected time between station observations.
+Expected observation cadence.
 
-For a station reporting every minute:
-
-```text
-EXPECTED_INTERVAL_SECONDS=60
-```
-
-For a station reporting every 15 minutes:
+Examples:
 
 ```text
-EXPECTED_INTERVAL_SECONDS=900
+60
 ```
+
+for one-minute observations, or:
+
+```text
+900
+```
+
+for 15-minute observations.
 
 ### `GAP_THRESHOLD_SECONDS`
 
-The time gap at which the summarizer begins identifying missing observations.
+Gap required before observations are inferred to be missing.
 
-For a 1-minute station:
-
-```text
-GAP_THRESHOLD_SECONDS=120
-```
-
-For a 15-minute station:
+Examples:
 
 ```text
-GAP_THRESHOLD_SECONDS=1800
+120
 ```
 
-### Example 15-Minute Configuration
+for a one-minute station, or:
 
 ```text
-OUTPUT_PATH=C:/Users/username/Documents/CHORDS/Summaries
-QC_PROFILE=nairobi
-EXPECTED_INTERVAL_SECONDS=900
-GAP_THRESHOLD_SECONDS=1800
+1800
 ```
 
-Save and close Notepad when finished.
+for a 15-minute station.
+
+For more information about regional profiles, see the [Configuration Guide](CONFIGURATION.md).
 
 ---
 
 ## 7. Run the Summarizer
 
-The summarizer processes a CSV file exported from CHORDS.
-
-The CSV must contain a timestamp column named:
+The input CSV must contain a timestamp column named:
 
 ```text
 Time
 ```
 
-With the virtual environment active, run:
+Run:
 
 ```powershell
 python summarize_chords.py "C:\path\to\station_data.csv"
@@ -328,52 +275,54 @@ For example:
 python summarize_chords.py "C:\Users\username\Documents\CHORDS\station_data.csv"
 ```
 
-Quotes are recommended around the input path, especially if any folder or filename contains spaces.
+Quotes are recommended around the path.
 
-The summarizer will display information about:
-
-- The selected QC profile
-- CHORDS variables that were mapped
-- Configured variables that were not present
-- Unmapped source columns
-- QC results
-- Missing observations
-- Observation period
-- Generated summary files
-
-A successful run will create:
+A successful run creates:
 
 ```text
 station_data_15min.csv
 station_data_hourly.csv
 station_data_daily.csv
+station_data_qc_report.csv
 ```
 
-in the folder specified by `OUTPUT_PATH`.
+in the directory specified by `OUTPUT_PATH`.
+
+The first three files contain meteorological statistics.
+
+The QC report contains:
+
+- Observation completeness
+- Variable completeness
+- Daily completeness
+- Partial-day status
+- Sentinel removals
+- Range QC removals
+- Temporal QC removals
+- Valid values remaining after QC
+- Rain consistency diagnostics
 
 ---
 
 # Running the Summarizer Next Time on Windows
 
-The Python installation, virtual environment, package installation, and creation of `summary.env` only need to be completed once.
+The virtual environment and package installation only need to be completed once.
 
 For future runs:
 
-## 1. Open PowerShell and Navigate to the Summarizer
+## 1. Navigate to the Repository
 
 ```powershell
 cd C:\Users\username\Documents\CHORDS\CHORDS_Data_Summarizer-main
 ```
 
-## 2. Activate the Existing Virtual Environment
+## 2. Activate the Environment
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
 ```
 
-## 3. Edit the Configuration if Necessary
-
-If you need to change the output location, QC profile, or expected station cadence:
+## 3. Edit Configuration if Necessary
 
 ```powershell
 notepad summary.env
@@ -381,19 +330,19 @@ notepad summary.env
 
 If the existing settings are correct, this step can be skipped.
 
-## 4. Run the Summarizer
+## 4. Run
 
 ```powershell
 python summarize_chords.py "C:\path\to\station_data.csv"
 ```
 
-The normal workflow after initial setup is therefore:
+Normal workflow:
 
 ```text
 Open PowerShell → Activate → Summarize
 ```
 
-or, when changing configurations:
+When changing profiles or cadence:
 
 ```text
 Open PowerShell → Activate → Configure → Summarize
@@ -403,42 +352,28 @@ Open PowerShell → Activate → Configure → Summarize
 
 # macOS / Linux
 
-## 1. Install Python
-
-Check that Python 3 is installed:
+## 1. Check Python
 
 ```bash
 python3 --version
 ```
 
-If Python is not installed, install a current Python 3 version using the normal installation method for your operating system.
-
 ---
 
-## 2. Download the CHORDS Data Summarizer
+## 2. Download or Clone the Repository
 
-The repository can be downloaded from:
-
-https://github.com/3d-paws/CHORDS_Data_Summarizer
-
-Select:
-
-**Code → Download ZIP**
-
-Extract the repository and navigate to it in Terminal.
-
-If Git is installed, you can instead clone it:
+Using Git:
 
 ```bash
 git clone https://github.com/3d-paws/CHORDS_Data_Summarizer.git
 cd CHORDS_Data_Summarizer
 ```
 
+Alternatively, download the ZIP file from GitHub and extract it.
+
 ---
 
-## 3. Create the Python Virtual Environment
-
-From the repository directory:
+## 3. Create the Virtual Environment
 
 ```bash
 python3 -m venv .venv
@@ -450,36 +385,26 @@ Activate it:
 source .venv/bin/activate
 ```
 
-The Terminal prompt should now begin with:
-
-```text
-(.venv)
-```
-
 ---
 
-## 4. Install the Required Python Packages
+## 4. Install Dependencies
 
 ```bash
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-These steps only need to be completed once.
-
 ---
 
 ## 5. Create the Configuration File
-
-Run:
 
 ```bash
 cp summary.env.example summary.env
 ```
 
-Open `summary.env` in your preferred text editor.
+Edit `summary.env` using your preferred text editor.
 
-For example:
+Example:
 
 ```text
 OUTPUT_PATH=/Users/username/Documents/CHORDS/Summaries
@@ -488,25 +413,19 @@ EXPECTED_INTERVAL_SECONDS=60
 GAP_THRESHOLD_SECONDS=120
 ```
 
-See the [Configuration Guide](CONFIGURATION.md) for detailed configuration information.
-
 ---
 
-## 6. Run the Summarizer
-
-With the virtual environment active:
+## 6. Run
 
 ```bash
 python summarize_chords.py /path/to/station_data.csv
 ```
 
-If the path contains spaces, place it in quotes:
+If the path contains spaces:
 
 ```bash
 python summarize_chords.py "/path/to/station data.csv"
 ```
-
-The generated summary files will be written to the directory specified by `OUTPUT_PATH`.
 
 ---
 
@@ -518,61 +437,56 @@ Navigate to the repository:
 cd /path/to/CHORDS_Data_Summarizer
 ```
 
-Activate the existing virtual environment:
+Activate the existing environment:
 
 ```bash
 source .venv/bin/activate
 ```
 
-Then run the summarizer:
+Run:
 
 ```bash
 python summarize_chords.py /path/to/station_data.csv
 ```
 
-Edit `summary.env` first if the profile or station cadence needs to change.
+Edit `summary.env` first if the regional profile or observation cadence needs to change.
 
 ---
 
 # Updating the Summarizer
 
-How the summarizer is updated depends on how it was downloaded.
+## ZIP Installation
 
-## If You Downloaded a ZIP File
-
-Download the latest ZIP file from:
+Download the newest ZIP file from:
 
 https://github.com/3d-paws/CHORDS_Data_Summarizer
 
-The new copy will contain the latest:
+Extract it and configure the new copy.
 
-- Python code
-- Configuration profiles
-- Documentation
-- Requirements
+Do not copy the old `.venv` directory into the new version. Create a new virtual environment and install the current requirements.
 
-Your existing `summary.env` contains your local settings and can be used as a reference when configuring the new copy.
+Your old `summary.env` can be used as a reference.
 
-After downloading a new version, create a new virtual environment and install the current requirements rather than copying the old `.venv` directory.
+---
 
-## If You Used Git
+## Git Installation
 
-Navigate to the repository and run:
+From the repository:
 
 ```bash
 git pull
 ```
 
-Activate the virtual environment and update the requirements:
+Then activate the virtual environment and update the requirements.
 
-### Windows
+Windows:
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 
-### macOS / Linux
+macOS / Linux:
 
 ```bash
 source .venv/bin/activate
@@ -585,17 +499,15 @@ pip install -r requirements.txt
 
 ## `py` Is Not Recognized on Windows
 
-Check that Python is installed.
-
-Python 3.10 can be installed with:
+Install Python 3.10:
 
 ```powershell
 winget install Python.Python.3.10
 ```
 
-Close and reopen PowerShell after installation.
+Close and reopen PowerShell.
 
-Then check:
+Then run:
 
 ```powershell
 py --list
@@ -611,7 +523,7 @@ Run:
 Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
 
-Then activate the environment again:
+Then:
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
@@ -621,7 +533,7 @@ Then activate the environment again:
 
 ## `ModuleNotFoundError`
 
-Make sure the virtual environment is active.
+Confirm that the virtual environment is active.
 
 The prompt should begin with:
 
@@ -629,7 +541,7 @@ The prompt should begin with:
 (.venv)
 ```
 
-Then install the requirements again:
+Then:
 
 ```bash
 pip install -r requirements.txt
@@ -637,15 +549,15 @@ pip install -r requirements.txt
 
 ---
 
-## The Configuration File Cannot Be Found
+## `summary.env` Cannot Be Found
 
-Confirm that the file is named exactly:
+The file must be named exactly:
 
 ```text
 summary.env
 ```
 
-and is located in the top-level repository directory alongside:
+and must be in the top-level repository directory alongside:
 
 ```text
 README.md
@@ -653,23 +565,15 @@ summarize_chords.py
 requirements.txt
 ```
 
-On Windows, you can check with:
-
-```powershell
-ls
-```
-
 ---
 
-## A QC Profile Cannot Be Found
+## QC Profile Cannot Be Found
 
-Check the value of:
+Check:
 
 ```text
 QC_PROFILE
 ```
-
-in `summary.env`.
 
 For example:
 
@@ -683,7 +587,7 @@ requires:
 configs/summary_config_nadi.json
 ```
 
-The profile name should not include:
+Do not include:
 
 ```text
 summary_config_
@@ -695,15 +599,15 @@ or:
 .json
 ```
 
-See the [Configuration Guide](CONFIGURATION.md) for more information.
+in the `QC_PROFILE` value.
 
 ---
 
-## The Input CSV Cannot Be Found
+## Input CSV Cannot Be Found
 
-Check the path passed to the summarizer.
+Check the supplied path.
 
-On Windows, using quotes around the full path is recommended:
+Windows example:
 
 ```powershell
 python summarize_chords.py "C:\Users\username\Documents\CHORDS\station_data.csv"
@@ -711,7 +615,7 @@ python summarize_chords.py "C:\Users\username\Documents\CHORDS\station_data.csv"
 
 ---
 
-## The Output Directory Is Incorrect
+## Output Is Going to the Wrong Folder
 
 Check:
 
@@ -721,7 +625,7 @@ OUTPUT_PATH
 
 in `summary.env`.
 
-On Windows, use forward slashes:
+Windows example:
 
 ```text
 OUTPUT_PATH=C:/Users/username/Documents/CHORDS/Summaries
@@ -731,14 +635,14 @@ OUTPUT_PATH=C:/Users/username/Documents/CHORDS/Summaries
 
 # Additional Documentation
 
-For information about configuring regional profiles, variables, aliases, and QC thresholds, see:
+For profile configuration:
 
 [Configuration Guide](CONFIGURATION.md)
 
-For details about the QC, completeness, wind, precipitation, and aggregation algorithms, see:
+For processing and QC algorithms:
 
 [Technical Details](TECHNICAL_DETAILS.md)
 
-For a shorter introduction and quick-start workflow, return to:
+For the short introduction:
 
 [README](../README.md)

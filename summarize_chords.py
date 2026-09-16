@@ -153,7 +153,6 @@ SUMMARY_PERIODS = {
 # =====================================================================
 
 def variable_name(tag):
-
     config = VARIABLES[tag]
 
     return config.get(
@@ -163,7 +162,6 @@ def variable_name(tag):
 
 
 def variable_unit(tag):
-
     return VARIABLES[tag].get(
         "unit"
     )
@@ -173,7 +171,6 @@ def output_label(
     tag,
     statistic,
 ):
-
     name = variable_name(tag)
     unit = variable_unit(tag)
 
@@ -216,12 +213,10 @@ def map_source_columns(df):
         for alias in aliases:
 
             if alias in df.columns:
-
                 matched_column = alias
                 break
 
         if matched_column is None:
-
             missing_tags.append(tag)
             continue
 
@@ -272,7 +267,6 @@ def map_source_columns(df):
             )
 
     else:
-
         print("  None")
 
     print()
@@ -401,15 +395,11 @@ def circular_mean_deg(series):
 
 def infer_missing_observation_times(index):
     """
-    Infer missing observations from gaps in the complete
-    timestamp series.
+    Infer missing observations from timestamp gaps.
 
     Timing variation below GAP_THRESHOLD_SECONDS is ignored.
 
-    Once a gap reaches the threshold, the number of missed
-    observations is estimated from EXPECTED_INTERVAL_SECONDS.
-
-    For a 60-second station with a 120-second threshold:
+    Example for a 60-second station with a 120-second threshold:
 
         65 sec   -> 0 missed
         119 sec  -> 0 missed
@@ -417,9 +407,6 @@ def infer_missing_observation_times(index):
         127 sec  -> 1 missed
         180 sec  -> 2 missed
         240 sec  -> 3 missed
-
-    This prevents small logger timing drift from causing
-    over-counting of missing observations.
     """
 
     if len(index) < 2:
@@ -442,7 +429,6 @@ def infer_missing_observation_times(index):
             current - previous
         ).total_seconds()
 
-        # Normal timing variation.
         if gap_seconds < GAP_THRESHOLD_SECONDS:
             continue
 
@@ -472,7 +458,6 @@ def infer_missing_observation_times(index):
             )
 
             if missing_time < current:
-
                 missing_times.append(
                     missing_time
                 )
@@ -507,92 +492,62 @@ def missing_observations_by_period(
     )
 
 
-def observation_completeness(
-    grouped,
-    frequency,
-    missing_times,
+def is_partial_day(
+    day,
+    first_observation,
+    last_observation,
 ):
+    """
+    Determine whether a daily QC record represents only part
+    of a calendar day.
 
-    observed_count = (
-        grouped
-        .size()
-    )
+    A tolerance equal to one expected observation interval is
+    allowed at the beginning and end of the day so ordinary
+    timestamp offsets do not incorrectly mark a day as partial.
+    """
 
-    missing_count = (
-        missing_observations_by_period(
-            missing_times,
-            frequency,
+    day_start = pd.Timestamp(
+        day
+    ).normalize()
+
+    day_end = (
+        day_start
+        + pd.Timedelta(
+            days=1
         )
     )
 
-    missing_count = (
-        missing_count
-        .reindex(
-            observed_count.index,
-            fill_value=0,
-        )
+    tolerance = pd.Timedelta(
+        seconds=EXPECTED_INTERVAL_SECONDS
     )
 
-    expected_count = (
-        observed_count
-        + missing_count
-    )
+    partial = False
 
-    completeness = (
-        observed_count
-        / expected_count
-        * 100.0
-    )
+    # First calendar day represented by the input file.
+    if (
+        day_start
+        == first_observation.normalize()
+    ):
 
-    return completeness
+        if (
+            first_observation
+            > day_start + tolerance
+        ):
+            partial = True
 
+    # Last calendar day represented by the input file.
+    if (
+        day_start
+        == last_observation.normalize()
+    ):
 
-def calculate_variable_completeness(
-    grouped,
-    tag,
-    frequency,
-    missing_times,
-):
+        if (
+            last_observation
+            < day_end - tolerance
+        ):
+            partial = True
 
-    observed_count = (
-        grouped
-        .size()
-    )
-
-    missing_count = (
-        missing_observations_by_period(
-            missing_times,
-            frequency,
-        )
-    )
-
-    missing_count = (
-        missing_count
-        .reindex(
-            observed_count.index,
-            fill_value=0,
-        )
-    )
-
-    expected_count = (
-        observed_count
-        + missing_count
-    )
-
-    valid_count = (
-        grouped[
-            tag
-        ]
-        .count()
-    )
-
-    completeness = (
-        valid_count
-        / expected_count
-        * 100.0
-    )
-
-    return completeness
+    return partial
 
 
 # =====================================================================
@@ -767,7 +722,6 @@ def apply_temporal_qc(
         )
 
         if isolated_spike:
-
             invalid_indices.append(
                 current_time
             )
@@ -791,10 +745,22 @@ def apply_temporal_qc(
 # BASIC QC
 # =====================================================================
 
-def apply_qc(df):
+def apply_qc(
+    df,
+    matched_tags,
+):
+    """
+    Apply QC and preserve QC counts for the QC report.
+    """
 
     print()
     print("Applying QC...")
+
+    qc_stats = {}
+
+    # -------------------------------------------------------------
+    # Numeric conversion, sentinel QC, and range QC
+    # -------------------------------------------------------------
 
     for tag, config in VARIABLES.items():
 
@@ -810,8 +776,34 @@ def apply_qc(df):
             errors="coerce",
         )
 
+        qc_stats[tag] = {
+            "source_column":
+                matched_tags.get(
+                    tag,
+                    "",
+                ),
+
+            "raw_non_missing":
+                int(
+                    df[
+                        tag
+                    ]
+                    .notna()
+                    .sum()
+                ),
+
+            "sentinel_removed":
+                0,
+
+            "range_removed":
+                0,
+
+            "temporal_removed":
+                0,
+        }
+
         # ---------------------------------------------------------
-        # Missing / sentinel values
+        # Sentinel / missing values
         # ---------------------------------------------------------
 
         missing_mask = (
@@ -824,6 +816,12 @@ def apply_qc(df):
         missing_count = int(
             missing_mask.sum()
         )
+
+        qc_stats[
+            tag
+        ][
+            "sentinel_removed"
+        ] = missing_count
 
         if missing_count:
 
@@ -840,7 +838,7 @@ def apply_qc(df):
             ] = np.nan
 
         # ---------------------------------------------------------
-        # Absolute range QC
+        # Environmental range QC
         # ---------------------------------------------------------
 
         if not config.get(
@@ -883,6 +881,12 @@ def apply_qc(df):
         range_count = int(
             range_mask.sum()
         )
+
+        qc_stats[
+            tag
+        ][
+            "range_removed"
+        ] = range_count
 
         if range_count:
 
@@ -927,6 +931,12 @@ def apply_qc(df):
             config,
         )
 
+        qc_stats[
+            tag
+        ][
+            "temporal_removed"
+        ] = count
+
         if count:
 
             print(
@@ -936,7 +946,28 @@ def apply_qc(df):
                 f"spikes/dips removed"
             )
 
-    return df
+    # -------------------------------------------------------------
+    # Final valid counts
+    # -------------------------------------------------------------
+
+    for tag in qc_stats:
+
+        qc_stats[
+            tag
+        ][
+            "valid_after_qc"
+        ] = int(
+            df[
+                tag
+            ]
+            .notna()
+            .sum()
+        )
+
+    return (
+        df,
+        qc_stats,
+    )
 
 
 # =====================================================================
@@ -995,7 +1026,6 @@ def add_standard_statistic(
         label = "Sum"
 
     else:
-
         return
 
     summary[
@@ -1167,6 +1197,15 @@ def add_max_gust_direction(
 def cumulative_rain_increment(
     series
 ):
+    """
+    Convert a cumulative rain counter into increments.
+
+    Normal increase:
+        4.2 -> 4.4 = 0.2
+
+    Counter reset:
+        12.6 -> 0.2 = 0.2
+    """
 
     difference = (
         series
@@ -1229,224 +1268,67 @@ def prepare_cumulative_rain_changes(
     return df
 
 
-def add_single_rain_gauge_statistics(
-    df,
-    summary,
-    period,
-    rain_tag,
-    total_tag,
+def add_rain_gauge_comparison(
+    summary
 ):
+    """
+    Primary meteorological summaries retain:
+
+      Rain Gauge 1 Sum
+      Rain Gauge 2 Sum
+      Rain Gauge 1 vs 2 Difference
+
+    Cumulative-rain diagnostics are written to the QC report.
+    """
 
     if (
-        total_tag
-        not in df.columns
+        "rg"
+        not in VARIABLES
+        or
+        "rg2"
+        not in VARIABLES
     ):
         return
 
-    frequency = (
-        SUMMARY_PERIODS[
-            period
-        ]
-    )
-
-    total_name = (
-        variable_name(
-            total_tag
-        )
-    )
-
-    total_series = (
-        df[
-            total_tag
-        ]
-        .resample(
-            frequency
-        )
-        .last()
-    )
-
-    summary[
-        f"{total_name} "
-        "Cumulative Rain Total "
-        "(mm H2O)"
-    ] = total_series
-
-    helper = (
-        f"__{total_tag}_change"
-    )
-
-    if helper not in df.columns:
-        return
-
-    cumulative_change = (
-        df[
-            helper
-        ]
-        .resample(
-            frequency
-        )
-        .sum(
-            min_count=1
-        )
-    )
-
-    summary[
-        f"{total_name} "
-        "Cumulative Total Change "
-        "(mm H2O)"
-    ] = cumulative_change
-
-    if rain_tag not in VARIABLES:
-        return
-
-    rain_sum_column = (
-        output_label(
-            rain_tag,
-            "Sum",
-        )
-    )
-
-    if (
-        rain_sum_column
-        in summary.columns
-    ):
-
-        summary[
-            f"{total_name} "
-            "Sum vs Cumulative Change "
-            "Difference (mm H2O)"
-        ] = (
-            summary[
-                rain_sum_column
-            ]
-            - cumulative_change
-        )
-
-
-def add_rain_statistics(
-    df,
-    summary,
-    period,
-):
-
-    add_single_rain_gauge_statistics(
-        df,
-        summary,
-        period,
+    rg1_column = output_label(
         "rg",
-        "rgt",
+        "Sum",
     )
 
-    add_single_rain_gauge_statistics(
-        df,
-        summary,
-        period,
+    rg2_column = output_label(
         "rg2",
-        "rgt2",
-    )
-
-    rg1_sum = (
-        output_label(
-            "rg",
-            "Sum",
-        )
-        if "rg" in VARIABLES
-        else None
-    )
-
-    rg2_sum = (
-        output_label(
-            "rg2",
-            "Sum",
-        )
-        if "rg2" in VARIABLES
-        else None
+        "Sum",
     )
 
     if (
-        rg1_sum
-        and rg2_sum
-        and rg1_sum in summary.columns
-        and rg2_sum in summary.columns
+        rg1_column not in summary.columns
+        or
+        rg2_column not in summary.columns
     ):
+        return
 
-        summary[
-            "Rain Gauge 1 vs 2 "
-            "Difference (mm H2O)"
-        ] = (
-            summary[
-                rg1_sum
-            ]
-            - summary[
-                rg2_sum
-            ]
+    unit = (
+        variable_unit(
+            "rg"
         )
-
-    rg1_total = (
-        "Rain Gauge 1 "
-        "Cumulative Rain Total "
-        "(mm H2O)"
+        or "mm"
     )
 
-    rg2_total = (
-        "Rain Gauge 2 "
-        "Cumulative Rain Total "
-        "(mm H2O)"
+    comparison_column = (
+        "Rain Gauge 1 vs 2 "
+        f"Difference ({unit})"
     )
 
-    if (
-        rg1_total
-        in summary.columns
-        and
-        rg2_total
-        in summary.columns
-    ):
-
+    summary[
+        comparison_column
+    ] = (
         summary[
-            "Rain Gauge 1 vs 2 "
-            "Cumulative Total Difference "
-            "(mm H2O)"
-        ] = (
-            summary[
-                rg1_total
-            ]
-            - summary[
-                rg2_total
-            ]
-        )
-
-    rg1_change = (
-        "Rain Gauge 1 "
-        "Cumulative Total Change "
-        "(mm H2O)"
+            rg1_column
+        ]
+        - summary[
+            rg2_column
+        ]
     )
-
-    rg2_change = (
-        "Rain Gauge 2 "
-        "Cumulative Total Change "
-        "(mm H2O)"
-    )
-
-    if (
-        rg1_change
-        in summary.columns
-        and
-        rg2_change
-        in summary.columns
-    ):
-
-        summary[
-            "Rain Gauge 1 vs 2 "
-            "Cumulative Change Difference "
-            "(mm H2O)"
-        ] = (
-            summary[
-                rg1_change
-            ]
-            - summary[
-                rg2_change
-            ]
-        )
 
 
 # =====================================================================
@@ -1473,31 +1355,19 @@ def reorder_columns(
             column
             not in ordered
         ):
-
             ordered.append(
                 column
             )
 
-    add(
-        "Observation Count"
-    )
-
-    add(
-        "Estimated Missed Observations"
-    )
-
-    add(
-        "Observation Completeness (%)"
-    )
-
     # -------------------------------------------------------------
-    # Air temperatures
+    # Air temperature means
     # -------------------------------------------------------------
 
     for tag in [
         "st1",
         "bt1",
         "mt1",
+        "htu_t1",
     ]:
 
         if tag in VARIABLES:
@@ -1509,12 +1379,17 @@ def reorder_columns(
                 )
             )
 
+    # -------------------------------------------------------------
+    # Daily air temperature minimums
+    # -------------------------------------------------------------
+
     if period == "daily":
 
         for tag in [
             "st1",
             "bt1",
             "mt1",
+            "htu_t1",
         ]:
 
             if tag in VARIABLES:
@@ -1526,10 +1401,15 @@ def reorder_columns(
                     )
                 )
 
+        # ---------------------------------------------------------
+        # Daily air temperature maximums
+        # ---------------------------------------------------------
+
         for tag in [
             "st1",
             "bt1",
             "mt1",
+            "htu_t1",
         ]:
 
             if tag in VARIABLES:
@@ -1545,7 +1425,13 @@ def reorder_columns(
     # Humidity
     # -------------------------------------------------------------
 
-    if "sh1" in VARIABLES:
+    for tag in [
+        "sh1",
+        "htu_h1",
+    ]:
+
+        if tag not in VARIABLES:
+            continue
 
         humidity_stats = (
             [
@@ -1563,7 +1449,7 @@ def reorder_columns(
 
             add(
                 output_label(
-                    "sh1",
+                    tag,
                     statistic,
                 )
             )
@@ -1624,27 +1510,40 @@ def reorder_columns(
     # Rain
     # -------------------------------------------------------------
 
-    rain_order = [
-        "Rain Gauge 1 Sum (mm H2O)",
-        "Rain Gauge 2 Sum (mm H2O)",
-        "Rain Gauge 1 vs 2 Difference (mm H2O)",
-
-        "Rain Gauge 1 Cumulative Rain Total (mm H2O)",
-        "Rain Gauge 2 Cumulative Rain Total (mm H2O)",
-        "Rain Gauge 1 vs 2 Cumulative Total Difference (mm H2O)",
-
-        "Rain Gauge 1 Cumulative Total Change (mm H2O)",
-        "Rain Gauge 2 Cumulative Total Change (mm H2O)",
-        "Rain Gauge 1 vs 2 Cumulative Change Difference (mm H2O)",
-
-        "Rain Gauge 1 Sum vs Cumulative Change Difference (mm H2O)",
-        "Rain Gauge 2 Sum vs Cumulative Change Difference (mm H2O)",
-    ]
-
-    for column in rain_order:
+    if "rg" in VARIABLES:
 
         add(
-            column
+            output_label(
+                "rg",
+                "Sum",
+            )
+        )
+
+    if "rg2" in VARIABLES:
+
+        add(
+            output_label(
+                "rg2",
+                "Sum",
+            )
+        )
+
+    if (
+        "rg" in VARIABLES
+        and
+        "rg2" in VARIABLES
+    ):
+
+        unit = (
+            variable_unit(
+                "rg"
+            )
+            or "mm"
+        )
+
+        add(
+            "Rain Gauge 1 vs 2 "
+            f"Difference ({unit})"
         )
 
     # -------------------------------------------------------------
@@ -1735,30 +1634,14 @@ def reorder_columns(
             )
 
     # -------------------------------------------------------------
-    # Variable completeness last
+    # Anything else configured for summary
     # -------------------------------------------------------------
-
-    completeness_columns = [
-        column
-        for column in all_columns
-        if (
-            "Completeness (%)"
-            in column
-            and
-            column
-            != "Observation Completeness (%)"
-        )
-    ]
 
     remaining = [
         column
         for column in all_columns
         if (
-            column
-            not in ordered
-            and
-            column
-            not in completeness_columns
+            column not in ordered
             and
             not column.startswith(
                 "__"
@@ -1770,23 +1653,18 @@ def reorder_columns(
         remaining
     )
 
-    ordered.extend(
-        completeness_columns
-    )
-
     return summary[
         ordered
     ]
 
 
 # =====================================================================
-# SUMMARY GENERATION
+# METEOROLOGICAL SUMMARY GENERATION
 # =====================================================================
 
 def summarize(
     df,
     period,
-    missing_observation_times,
 ):
 
     frequency = (
@@ -1810,81 +1688,12 @@ def summarize(
         )
     )
 
-    completeness = pd.DataFrame(
-        index=summary.index
-    )
-
-    summary[
-        "Observation Count"
-    ] = (
-        grouped
-        .size()
-    )
-
-    missing_by_period = (
-        missing_observations_by_period(
-            missing_observation_times,
-            frequency,
-        )
-    )
-
-    missing_by_period = (
-        missing_by_period
-        .reindex(
-            summary.index,
-            fill_value=0,
-        )
-    )
-
-    summary[
-        "Estimated Missed Observations"
-    ] = (
-        missing_by_period
-        .astype(int)
-    )
-
-    summary[
-        "Observation Completeness (%)"
-    ] = (
-        observation_completeness(
-            grouped,
-            frequency,
-            missing_observation_times,
-        )
-        .round(2)
-    )
-
     max_gust_direction_needed = False
-
-    # -------------------------------------------------------------
-    # Configured variables
-    # -------------------------------------------------------------
 
     for tag, config in VARIABLES.items():
 
         if tag not in df.columns:
             continue
-
-        # ---------------------------------------------------------
-        # Completeness
-        # ---------------------------------------------------------
-
-        if config.get(
-            "include_completeness",
-            False,
-        ):
-
-            completeness[
-                f"{variable_name(tag)} "
-                "Completeness (%)"
-            ] = (
-                calculate_variable_completeness(
-                    grouped,
-                    tag,
-                    frequency,
-                    missing_observation_times,
-                )
-            )
 
         if not config.get(
             "include_in_summary",
@@ -1897,6 +1706,8 @@ def summarize(
             "measurement",
         )
 
+        # Cumulative rain totals are retained for QC diagnostics
+        # rather than included in meteorological summary files.
         if (
             variable_type
             == "rain_total"
@@ -1915,6 +1726,10 @@ def summarize(
             )
         )
 
+        # ---------------------------------------------------------
+        # Wind direction
+        # ---------------------------------------------------------
+
         if (
             variable_type
             == "wind_direction"
@@ -1928,6 +1743,10 @@ def summarize(
             )
 
             continue
+
+        # ---------------------------------------------------------
+        # Standard statistics
+        # ---------------------------------------------------------
 
         for statistic in statistics:
 
@@ -1953,7 +1772,7 @@ def summarize(
                 max_gust_direction_needed = True
 
     # -------------------------------------------------------------
-    # Gust direction
+    # Gust direction corresponding to max gust
     # -------------------------------------------------------------
 
     if (
@@ -1972,26 +1791,18 @@ def summarize(
         )
 
     # -------------------------------------------------------------
-    # Rain
+    # Dual rain gauge comparison
     # -------------------------------------------------------------
 
-    add_rain_statistics(
-        df,
-        summary,
-        period,
+    add_rain_gauge_comparison(
+        summary
     )
 
     # -------------------------------------------------------------
-    # Round
+    # Round numeric output
     # -------------------------------------------------------------
 
     for column in summary.columns:
-
-        if column in [
-            "Observation Count",
-            "Estimated Missed Observations",
-        ]:
-            continue
 
         if (
             "Compass"
@@ -2019,25 +1830,597 @@ def summarize(
                 )
             )
 
-    completeness = (
-        completeness
-        .round(
-            2
-        )
-    )
-
-    summary = pd.concat(
-        [
-            summary,
-            completeness,
-        ],
-        axis=1,
-    )
-
     return reorder_columns(
         summary,
         period,
     )
+
+
+# =====================================================================
+# QC REPORT
+# =====================================================================
+
+def build_qc_report(
+    df,
+    qc_stats,
+    matched_tags,
+    missing_observation_times,
+):
+    """
+    Build one QC report containing:
+
+      Dataset-wide observation completeness
+      Variable-level completeness and QC counts
+      Daily observation completeness
+      Partial-day identification
+      Rain consistency diagnostics
+    """
+
+    rows = []
+
+    observed_count = len(
+        df
+    )
+
+    missed_count = len(
+        missing_observation_times
+    )
+
+    expected_count = (
+        observed_count
+        + missed_count
+    )
+
+    if expected_count > 0:
+
+        overall_observation_completeness = (
+            observed_count
+            / expected_count
+            * 100.0
+        )
+
+    else:
+        overall_observation_completeness = np.nan
+
+    first_observation = (
+        df.index.min()
+    )
+
+    last_observation = (
+        df.index.max()
+    )
+
+    # -------------------------------------------------------------
+    # Dataset summary
+    # -------------------------------------------------------------
+
+    rows.append(
+        {
+            "Record Type":
+                "Dataset",
+
+            "Period":
+                "Entire File",
+
+            "Partial Day":
+                "",
+
+            "Variable":
+                "",
+
+            "Source Column":
+                "",
+
+            "Unit":
+                "",
+
+            "Observation Count":
+                observed_count,
+
+            "Estimated Missed Observations":
+                missed_count,
+
+            "Observation Completeness (%)":
+                overall_observation_completeness,
+
+            "Variable Completeness (%)":
+                np.nan,
+
+            "Raw Non-Missing":
+                np.nan,
+
+            "Sentinel Removed":
+                np.nan,
+
+            "Range QC Removed":
+                np.nan,
+
+            "Temporal QC Removed":
+                np.nan,
+
+            "Total QC Removed":
+                np.nan,
+
+            "Valid After QC":
+                np.nan,
+
+            "Rain Increment Sum":
+                np.nan,
+
+            "Rain Cumulative Change":
+                np.nan,
+
+            "Rain Difference":
+                np.nan,
+
+            "Notes":
+                (
+                    f"Observed-period completeness. "
+                    f"Expected interval: "
+                    f"{EXPECTED_INTERVAL_SECONDS} seconds; "
+                    f"gap threshold: "
+                    f"{GAP_THRESHOLD_SECONDS} seconds"
+                ),
+        }
+    )
+
+    # -------------------------------------------------------------
+    # Variable QC rows
+    # -------------------------------------------------------------
+
+    variable_denominator = (
+        observed_count
+        + missed_count
+    )
+
+    for tag, stats in qc_stats.items():
+
+        config = VARIABLES.get(
+            tag,
+            {},
+        )
+
+        valid_after = stats.get(
+            "valid_after_qc",
+            0,
+        )
+
+        if (
+            config.get(
+                "include_completeness",
+                False,
+            )
+            and
+            variable_denominator > 0
+        ):
+
+            variable_completeness = (
+                valid_after
+                / variable_denominator
+                * 100.0
+            )
+
+        else:
+            variable_completeness = np.nan
+
+        sentinel_removed = stats.get(
+            "sentinel_removed",
+            0,
+        )
+
+        range_removed = stats.get(
+            "range_removed",
+            0,
+        )
+
+        temporal_removed = stats.get(
+            "temporal_removed",
+            0,
+        )
+
+        total_removed = (
+            sentinel_removed
+            + range_removed
+            + temporal_removed
+        )
+
+        rows.append(
+            {
+                "Record Type":
+                    "Variable",
+
+                "Period":
+                    "Entire File",
+
+                "Partial Day":
+                    "",
+
+                "Variable":
+                    variable_name(
+                        tag
+                    ),
+
+                "Source Column":
+                    stats.get(
+                        "source_column",
+                        "",
+                    ),
+
+                "Unit":
+                    variable_unit(
+                        tag
+                    )
+                    or "",
+
+                "Observation Count":
+                    np.nan,
+
+                "Estimated Missed Observations":
+                    np.nan,
+
+                "Observation Completeness (%)":
+                    np.nan,
+
+                "Variable Completeness (%)":
+                    variable_completeness,
+
+                "Raw Non-Missing":
+                    stats.get(
+                        "raw_non_missing",
+                        np.nan,
+                    ),
+
+                "Sentinel Removed":
+                    sentinel_removed,
+
+                "Range QC Removed":
+                    range_removed,
+
+                "Temporal QC Removed":
+                    temporal_removed,
+
+                "Total QC Removed":
+                    total_removed,
+
+                "Valid After QC":
+                    valid_after,
+
+                "Rain Increment Sum":
+                    np.nan,
+
+                "Rain Cumulative Change":
+                    np.nan,
+
+                "Rain Difference":
+                    np.nan,
+
+                "Notes":
+                    "",
+            }
+        )
+
+    # -------------------------------------------------------------
+    # Daily observation completeness
+    # -------------------------------------------------------------
+
+    daily_observed = (
+        df
+        .resample(
+            "1D"
+        )
+        .size()
+    )
+
+    daily_missing = (
+        missing_observations_by_period(
+            missing_observation_times,
+            "1D",
+        )
+    )
+
+    daily_missing = (
+        daily_missing
+        .reindex(
+            daily_observed.index,
+            fill_value=0,
+        )
+    )
+
+    for timestamp in daily_observed.index:
+
+        observed = int(
+            daily_observed.loc[
+                timestamp
+            ]
+        )
+
+        missed = int(
+            daily_missing.loc[
+                timestamp
+            ]
+        )
+
+        expected = (
+            observed
+            + missed
+        )
+
+        if expected > 0:
+
+            observation_completeness = (
+                observed
+                / expected
+                * 100.0
+            )
+
+        else:
+            observation_completeness = np.nan
+
+        partial_day = is_partial_day(
+            timestamp,
+            first_observation,
+            last_observation,
+        )
+
+        if partial_day:
+
+            notes = (
+                "Partial calendar day. Completeness applies "
+                "only to the observed portion of the dataset."
+            )
+
+        else:
+            notes = ""
+
+        rows.append(
+            {
+                "Record Type":
+                    "Daily Completeness",
+
+                "Period":
+                    timestamp.strftime(
+                        "%Y-%m-%d"
+                    ),
+
+                "Partial Day":
+                    (
+                        "Yes"
+                        if partial_day
+                        else "No"
+                    ),
+
+                "Variable":
+                    "",
+
+                "Source Column":
+                    "",
+
+                "Unit":
+                    "",
+
+                "Observation Count":
+                    observed,
+
+                "Estimated Missed Observations":
+                    missed,
+
+                "Observation Completeness (%)":
+                    observation_completeness,
+
+                "Variable Completeness (%)":
+                    np.nan,
+
+                "Raw Non-Missing":
+                    np.nan,
+
+                "Sentinel Removed":
+                    np.nan,
+
+                "Range QC Removed":
+                    np.nan,
+
+                "Temporal QC Removed":
+                    np.nan,
+
+                "Total QC Removed":
+                    np.nan,
+
+                "Valid After QC":
+                    np.nan,
+
+                "Rain Increment Sum":
+                    np.nan,
+
+                "Rain Cumulative Change":
+                    np.nan,
+
+                "Rain Difference":
+                    np.nan,
+
+                "Notes":
+                    notes,
+            }
+        )
+
+    # -------------------------------------------------------------
+    # Rain consistency diagnostics
+    # -------------------------------------------------------------
+
+    rain_pairs = [
+        (
+            "rg",
+            "rgt",
+            "Rain Gauge 1",
+        ),
+        (
+            "rg2",
+            "rgt2",
+            "Rain Gauge 2",
+        ),
+    ]
+
+    for (
+        rain_tag,
+        total_tag,
+        gauge_name,
+    ) in rain_pairs:
+
+        helper = (
+            f"__{total_tag}_change"
+        )
+
+        if (
+            rain_tag not in df.columns
+            or
+            helper not in df.columns
+        ):
+            continue
+
+        increment_sum = (
+            df[
+                rain_tag
+            ]
+            .sum(
+                min_count=1
+            )
+        )
+
+        cumulative_change = (
+            df[
+                helper
+            ]
+            .sum(
+                min_count=1
+            )
+        )
+
+        if (
+            pd.notna(
+                increment_sum
+            )
+            and
+            pd.notna(
+                cumulative_change
+            )
+        ):
+
+            difference = (
+                increment_sum
+                - cumulative_change
+            )
+
+        else:
+            difference = np.nan
+
+        rows.append(
+            {
+                "Record Type":
+                    "Rain QC",
+
+                "Period":
+                    "Entire File",
+
+                "Partial Day":
+                    "",
+
+                "Variable":
+                    gauge_name,
+
+                "Source Column":
+                    matched_tags.get(
+                        rain_tag,
+                        "",
+                    ),
+
+                "Unit":
+                    variable_unit(
+                        rain_tag
+                    )
+                    or "",
+
+                "Observation Count":
+                    np.nan,
+
+                "Estimated Missed Observations":
+                    np.nan,
+
+                "Observation Completeness (%)":
+                    np.nan,
+
+                "Variable Completeness (%)":
+                    np.nan,
+
+                "Raw Non-Missing":
+                    np.nan,
+
+                "Sentinel Removed":
+                    np.nan,
+
+                "Range QC Removed":
+                    np.nan,
+
+                "Temporal QC Removed":
+                    np.nan,
+
+                "Total QC Removed":
+                    np.nan,
+
+                "Valid After QC":
+                    np.nan,
+
+                "Rain Increment Sum":
+                    increment_sum,
+
+                "Rain Cumulative Change":
+                    cumulative_change,
+
+                "Rain Difference":
+                    difference,
+
+                "Notes":
+                    (
+                        "Rain Difference = "
+                        "incremental rain sum - "
+                        "cumulative rain change"
+                    ),
+            }
+        )
+
+    qc_report = pd.DataFrame(
+        rows
+    )
+
+    # -------------------------------------------------------------
+    # Round numeric fields
+    # -------------------------------------------------------------
+
+    numeric_columns = [
+        "Observation Completeness (%)",
+        "Variable Completeness (%)",
+        "Rain Increment Sum",
+        "Rain Cumulative Change",
+        "Rain Difference",
+    ]
+
+    for column in numeric_columns:
+
+        if column in qc_report.columns:
+
+            qc_report[
+                column
+            ] = (
+                pd.to_numeric(
+                    qc_report[
+                        column
+                    ],
+                    errors="coerce",
+                )
+                .round(
+                    2
+                )
+            )
+
+    return qc_report
 
 
 # =====================================================================
@@ -2062,8 +2445,7 @@ def main():
         print("Example:")
         print(
             '  python summarize_chords.py '
-            '"/Users/username/Documents/'
-            'CHORDS/Fiji_Instrument-4.csv"'
+            '"/path/to/station_data.csv"'
         )
 
         print()
@@ -2192,7 +2574,7 @@ def main():
     )
 
     # -------------------------------------------------------------
-    # Infer missing observations before QC
+    # Infer missing observations BEFORE sensor QC
     # -------------------------------------------------------------
 
     missing_observation_times = (
@@ -2231,30 +2613,19 @@ def main():
     )
 
     # -------------------------------------------------------------
-    # Numeric conversion
-    # -------------------------------------------------------------
-
-    for tag in matched_tags:
-
-        df[
-            tag
-        ] = pd.to_numeric(
-            df[
-                tag
-            ],
-            errors="coerce",
-        )
-
-    # -------------------------------------------------------------
     # QC
     # -------------------------------------------------------------
 
-    df = apply_qc(
-        df
+    (
+        df,
+        qc_stats,
+    ) = apply_qc(
+        df,
+        matched_tags,
     )
 
     # -------------------------------------------------------------
-    # Rain cumulative changes
+    # Prepare cumulative-rain diagnostics
     # -------------------------------------------------------------
 
     df = prepare_cumulative_rain_changes(
@@ -2262,7 +2633,7 @@ def main():
     )
 
     # -------------------------------------------------------------
-    # Dataset info
+    # Dataset information
     # -------------------------------------------------------------
 
     print()
@@ -2279,7 +2650,7 @@ def main():
     )
 
     # -------------------------------------------------------------
-    # Create summaries
+    # Meteorological summaries
     # -------------------------------------------------------------
 
     outputs = {}
@@ -2301,8 +2672,23 @@ def main():
         ] = summarize(
             df,
             period,
-            missing_observation_times,
         )
+
+    # -------------------------------------------------------------
+    # QC report
+    # -------------------------------------------------------------
+
+    print()
+    print(
+        "Creating QC report..."
+    )
+
+    qc_report = build_qc_report(
+        df,
+        qc_stats,
+        matched_tags,
+        missing_observation_times,
+    )
 
     # -------------------------------------------------------------
     # Output filenames
@@ -2334,23 +2720,44 @@ def main():
                 f"{base_name}"
                 f"_daily.csv"
             ),
+
+        "qc_report":
+            OUTPUT_PATH
+            / (
+                f"{base_name}"
+                f"_qc_report.csv"
+            ),
     }
 
     # -------------------------------------------------------------
-    # Save
+    # Write meteorological summaries
     # -------------------------------------------------------------
 
-    for (
-        period,
-        dataframe,
-    ) in outputs.items():
+    for period in [
+        "15min",
+        "hourly",
+        "daily",
+    ]:
 
-        dataframe.to_csv(
+        outputs[
+            period
+        ].to_csv(
             output_files[
                 period
             ],
             index_label="Time",
         )
+
+    # -------------------------------------------------------------
+    # Write QC report
+    # -------------------------------------------------------------
+
+    qc_report.to_csv(
+        output_files[
+            "qc_report"
+        ],
+        index=False,
+    )
 
     # -------------------------------------------------------------
     # Finished
@@ -2378,12 +2785,12 @@ def main():
     print()
 
     for (
-        period,
+        label,
         path,
     ) in output_files.items():
 
         print(
-            f"{period:<8}: "
+            f"{label:<10}: "
             f"{path}"
         )
 

@@ -1,25 +1,24 @@
-# Configuration Guide
+# CHORDS Data Summarizer — Configuration Guide
 
 This guide explains how to configure the **CHORDS Data Summarizer** for different stations, sensors, and environmental regions.
 
 The summarizer uses JSON configuration profiles to define:
 
-- How CHORDS columns map to measurements
-- How measurements are named in summary files
-- Which measurements receive quality control
-- Acceptable environmental ranges
-- Temporal spike/dip detection settings
-- Which measurements appear in summaries
-- Which measurements receive completeness calculations
-- Which statistics are calculated at each summary interval
+- CHORDS source-column mappings
+- Output names and units
+- Environmental QC ranges
+- Temporal spike/dip QC
+- Summary inclusion
+- Variable completeness reporting
+- Aggregation statistics
 
-For details about how the underlying QC and aggregation algorithms work, see [Technical Details](TECHNICAL_DETAILS.md).
+For details about the processing algorithms themselves, see [Technical Details](TECHNICAL_DETAILS.md).
 
 ---
 
-## Configuration Profiles
+# Configuration Profiles
 
-Configuration profiles are stored in:
+Profiles are stored in:
 
 ```text
 configs/
@@ -31,7 +30,7 @@ and follow the naming convention:
 summary_config_<profile>.json
 ```
 
-For example:
+Examples:
 
 ```text
 summary_config_nadi.json
@@ -40,19 +39,19 @@ summary_config_adama.json
 summary_config_nairobi.json
 ```
 
-The profile used by the summarizer is selected in `summary.env`:
+The profile is selected in `summary.env`:
 
 ```text
 QC_PROFILE=nadi
 ```
 
-This loads:
+which loads:
 
 ```text
 configs/summary_config_nadi.json
 ```
 
-Profiles are intended to allow the same summarization code to be used with different:
+Profiles allow the same code to support different:
 
 - Station configurations
 - Sensor combinations
@@ -60,6 +59,57 @@ Profiles are intended to allow the same summarization code to be used with diffe
 - Climates
 - Elevations
 - Generations of 3D-PAWS hardware and firmware
+
+---
+
+# Top-Level Structure
+
+A configuration file contains:
+
+```json
+{
+  "_meta": {
+    "profile_name": "Nadi, Fiji",
+    "missing_value_threshold": -900
+  },
+
+  "variables": {
+  }
+}
+```
+
+---
+
+# `_meta`
+
+## `profile_name`
+
+Human-readable name reported when the summarizer runs.
+
+Example:
+
+```json
+"profile_name": "Nadi, Fiji"
+```
+
+## `missing_value_threshold`
+
+Defines the global threshold used to identify sentinel or invalid values.
+
+Example:
+
+```json
+"missing_value_threshold": -900
+```
+
+Values at or below this threshold are treated as missing.
+
+This captures values such as:
+
+```text
+-999
+-999.9
+```
 
 ---
 
@@ -76,9 +126,7 @@ wd
 rg
 ```
 
-These internal names correspond to the variable tags used by 3D-PAWS.
-
-A typical configuration entry looks like:
+A typical definition looks like:
 
 ```json
 "st1": {
@@ -107,8 +155,6 @@ A typical configuration entry looks like:
 }
 ```
 
-The following sections explain each field.
-
 ---
 
 # `display_name`
@@ -117,17 +163,9 @@ The following sections explain each field.
 "display_name": "SHT31D Temperature"
 ```
 
-The human-readable name used when identifying the measurement and creating summary output columns.
+Human-readable name used in outputs and the QC report.
 
-The display name does not need to match the original CHORDS column name.
-
-For example, several generations of a sensor may all be presented as:
-
-```text
-SHT31D Temperature
-```
-
-even if their source column names differ.
+The display name does not need to match the CHORDS source column.
 
 ---
 
@@ -137,9 +175,9 @@ even if their source column names differ.
 "unit": "degC"
 ```
 
-Defines the measurement unit used when naming summary columns.
+Unit displayed in output-column names.
 
-Examples include:
+Examples:
 
 ```text
 degC
@@ -147,10 +185,13 @@ degC
 hPa
 m/s
 deg
+mm
 mm H2O
 ```
 
-The configuration does **not** perform unit conversion. The configured unit should therefore describe the units of the mapped source measurement.
+The configuration does not perform unit conversion.
+
+The configured unit should describe the source measurement.
 
 ---
 
@@ -163,19 +204,9 @@ The configuration does **not** perform unit conversion. The configured unit shou
 ]
 ```
 
-Defines the CHORDS column names that may represent this measurement.
+Lists CHORDS column names that may represent the variable.
 
-This is one of the most important parts of the configuration system.
-
-3D-PAWS variable names have changed across different:
-
-- Sensors
-- Firmware versions
-- Station generations
-- Projects
-- CHORDS instruments
-
-Aliases allow these different names to map to a common internal variable.
+This allows different station generations or firmware versions to map to the same internal variable.
 
 For example:
 
@@ -186,13 +217,13 @@ For example:
 ]
 ```
 
-allows both newer and older MCP9808 measurements to map to:
+allows both names to map to:
 
 ```text
 mt1
 ```
 
-Similarly, legacy FEWS NET stations may contain names such as:
+Legacy FEWS NET stations may contain names such as:
 
 ```text
 BMX Temperature 1 (degC)
@@ -201,7 +232,7 @@ HTU Temperature 1 (degC)
 HTU Humidity 1 (%)
 ```
 
-These can be mapped to the appropriate internal measurements through aliases.
+These can be mapped through aliases without modifying the original CSV.
 
 ## Adding an Alias
 
@@ -211,17 +242,9 @@ If the summarizer reports:
 Unmapped source columns:
 ```
 
-and the column represents a measurement already supported by the configuration, add its exact CHORDS column name to `source_columns`.
+and the column represents a measurement already supported by the profile, add the exact CHORDS column name to `source_columns`.
 
-For example, changing:
-
-```json
-"source_columns": [
-  "SHT31D Temperature (degC)"
-]
-```
-
-to:
+For example:
 
 ```json
 "source_columns": [
@@ -229,10 +252,6 @@ to:
   "SHT Temperature (degC)"
 ]
 ```
-
-adds support for the legacy name without changing the summarization code.
-
-Do not create a new internal variable simply because a sensor has a different CHORDS display name if it represents the same measurement.
 
 ---
 
@@ -242,17 +261,27 @@ Do not create a new internal variable simply because a sensor has a different CH
 "type": "measurement"
 ```
 
-Identifies the general role of the configured variable.
+Identifies the processing role of the variable.
 
-Environmental observations that are summarized normally use:
+Examples currently used include:
 
 ```text
 measurement
+derived
+wind_speed
+wind_direction
+wind_gust
+gust_direction
+rain_increment
+rain_total
+rain_prior
+soil_temperature
+grass_temperature
+status
+system
 ```
 
-Operational variables such as station health, battery, and cellular information may also be mapped by the configuration even when they are not included in meteorological summaries.
-
-Do not introduce a new `type` value unless it is supported by `summarize_chords.py`.
+Do not invent a new `type` unless `summarize_chords.py` supports it.
 
 ---
 
@@ -262,15 +291,7 @@ Do not introduce a new `type` value unless it is supported by `summarize_chords.
 "qc_enabled": true
 ```
 
-Controls whether environmental range QC is applied to the measurement.
-
-When:
-
-```json
-"qc_enabled": true
-```
-
-the configured `min` and `max` values are used to determine whether a measurement is within the accepted range.
+Controls whether minimum/maximum range QC is applied.
 
 When:
 
@@ -278,74 +299,45 @@ When:
 "qc_enabled": false
 ```
 
-the environmental range test is not applied.
+environmental range checking is skipped.
 
-Sentinel/missing-value handling is separate from environmental range QC.
+Sentinel handling is independent of `qc_enabled`.
 
 ---
 
 # `min` and `max`
 
+Example:
+
 ```json
 "min": 10,
 "max": 45
 ```
 
-Define the accepted environmental range for the measurement.
-
-A measurement is accepted when:
+A valid measurement satisfies:
 
 ```text
 min <= value <= max
 ```
 
-Values outside this range are treated as invalid before aggregation.
-
-For example:
-
-```json
-"min": 10,
-"max": 45
-```
-
-would accept:
-
-```text
-10.0
-25.3
-45.0
-```
-
-but reject:
-
-```text
-9.9
-46.0
-```
+Values outside the configured range are converted to missing values before aggregation.
 
 ## Choosing QC Ranges
 
-QC ranges should represent values that are clearly unreasonable for the station environment rather than attempting to define the normal climatology.
+Ranges should identify clearly implausible values rather than define normal climatology.
 
-The purpose is to identify likely:
+They should generally be broad enough to preserve legitimate extremes.
 
-- Sensor failures
-- Invalid readings
-- Electrical problems
-- Parsing problems
-- Physically unreasonable observations
+Consider:
 
-The limits should generally be broad enough to retain legitimate extreme weather.
+- Station elevation
+- Regional climate
+- Sensor measurement limits
+- Expected environmental extremes
 
-### Regional Differences
+For example, normal station pressure at Addis Ababa or Nairobi is substantially lower than at a near-sea-level Fiji station.
 
-The same limits should not necessarily be used everywhere.
-
-For example, station pressure at a high-elevation location such as Addis Ababa or Nairobi is naturally much lower than station pressure near sea level in Fiji.
-
-This is one reason the summarizer uses regional profiles.
-
-The existing profiles should be treated as **first-pass engineering QC configurations**, not official WMO or NMHS climatological standards.
+The supplied limits are practical first-pass engineering QC thresholds rather than official climatological limits.
 
 ---
 
@@ -355,30 +347,21 @@ The existing profiles should be treated as **first-pass engineering QC configura
 "temporal_qc_enabled": true
 ```
 
-Controls whether temporal spike/dip detection is applied to the measurement.
+Controls temporal spike/dip detection.
 
-Temporal QC attempts to identify an isolated measurement that changes rapidly and then returns close to its previous value.
-
-For example:
+Temporal QC attempts to identify isolated anomalies such as:
 
 ```text
 20.1
 20.3
-35.8   <- possible spike
+35.8
 20.4
 20.5
 ```
 
-Temporal QC is controlled by four additional parameters:
+rather than sustained changes.
 
-```text
-spike_threshold
-neighbor_tolerance
-max_rate_change_per_minute
-spike_max_neighbor_gap_seconds
-```
-
-These settings are ignored when temporal QC is disabled.
+Four configuration fields control the test.
 
 ---
 
@@ -388,13 +371,9 @@ These settings are ignored when temporal QC is disabled.
 "spike_threshold": 3.0
 ```
 
-Defines how different the candidate measurement must be from its neighboring valid observations before it can be considered a spike or dip.
+Minimum difference between the candidate observation and the neighboring valid measurements.
 
-A larger value makes the temporal QC less sensitive.
-
-A smaller value makes it more sensitive.
-
-This value should be selected according to the natural variability and measurement characteristics of the variable.
+Larger values make the check less sensitive.
 
 ---
 
@@ -404,23 +383,9 @@ This value should be selected according to the natural variability and measureme
 "neighbor_tolerance": 1.5
 ```
 
-Defines how closely the valid observations before and after a suspected spike must agree.
+Maximum acceptable difference between the observations before and after a suspected spike.
 
-For example:
-
-```text
-20.1
-35.8
-20.4
-```
-
-has neighboring measurements that differ by only:
-
-```text
-0.3
-```
-
-The agreement between the neighboring observations provides evidence that `35.8` is an isolated anomaly rather than part of a sustained environmental change.
+If the surrounding observations agree closely but the center value differs substantially, the center value is more likely to represent an isolated error.
 
 ---
 
@@ -430,13 +395,9 @@ The agreement between the neighboring observations provides evidence that `35.8`
 "max_rate_change_per_minute": 3.0
 ```
 
-Defines the rate-of-change criterion used by temporal QC.
+Rate-of-change threshold used by temporal QC.
 
-The calculation accounts for the actual elapsed time between observations rather than assuming that every observation arrived at exactly the configured station interval.
-
-This is important for 3D-PAWS observations that may contain normal timestamp jitter.
-
-The candidate must meet the configured temporal QC conditions before it is removed.
+Actual elapsed time between measurements is used in the calculation.
 
 ---
 
@@ -446,11 +407,9 @@ The candidate must meet the configured temporal QC conditions before it is remov
 "spike_max_neighbor_gap_seconds": 1200
 ```
 
-Defines the maximum amount of time that may separate a candidate measurement from the valid observations used to evaluate it.
+Maximum time separating the candidate from the valid measurements used to evaluate it.
 
-This prevents measurements separated by large data gaps from being treated as immediate temporal neighbors.
-
-For example, observations several hours apart should generally not be used to determine whether an individual measurement represents a short-duration sensor spike.
+This prevents observations separated by very large data gaps from being treated as immediate temporal neighbors.
 
 ---
 
@@ -460,7 +419,7 @@ For example, observations several hours apart should generally not be used to de
 "include_in_summary": true
 ```
 
-Controls whether the measurement appears in the generated meteorological summary files.
+Controls whether the measurement appears in the 15-minute, hourly, or daily meteorological files.
 
 Use:
 
@@ -468,16 +427,14 @@ Use:
 "include_in_summary": false
 ```
 
-for recognized measurements that should not currently appear in the 15-minute, hourly, or daily summaries.
+for recognized variables that should not appear in the main meteorological products.
 
-This is useful for operational variables such as:
+Examples can include:
 
 - Health status
-- Cellular signal
 - Battery state
-- Charger status
-
-These variables can remain mapped and recognized without being included in the meteorological products.
+- Cellular signal
+- Cumulative rain counters used only for diagnostics
 
 ---
 
@@ -487,30 +444,34 @@ These variables can remain mapped and recognized without being included in the m
 "include_completeness": true
 ```
 
-Controls whether individual variable completeness is calculated and included in the summary output.
+Controls whether the variable receives a:
 
-For environmental measurements, this is normally:
-
-```json
-true
+```text
+Variable Completeness (%)
 ```
 
-Variable completeness helps distinguish between:
+value in:
 
-- A station-wide observation gap
-- A sensor-specific data problem
+```text
+<filename>_qc_report.csv
+```
 
-Operational variables that are not part of the meteorological summaries may use:
+Variable completeness accounts for:
+
+- observations missing from the dataset, and
+- individual measurements missing or removed by QC.
+
+Operational or diagnostic variables that do not require completeness reporting can use:
 
 ```json
-false
+"include_completeness": false
 ```
+
+Completeness values are stored in the QC report rather than in the 15-minute, hourly, or daily meteorological summary files.
 
 ---
 
 # `statistics`
-
-The `statistics` object determines how a measurement is aggregated.
 
 Example:
 
@@ -522,11 +483,9 @@ Example:
 }
 ```
 
-Each summary interval can have its own aggregation rules.
+Defines aggregation rules for each summary period.
 
-## Common Statistics
-
-Currently used statistics include:
+Basic supported statistics include:
 
 ```text
 mean
@@ -535,9 +494,11 @@ max
 sum
 ```
 
-Only statistics supported by the summarizer should be used.
+Some specialized variables use additional processing.
 
-### Example: Air Temperature
+---
+
+## Air Temperature Example
 
 ```json
 "statistics": {
@@ -547,7 +508,9 @@ Only statistics supported by the summarizer should be used.
 }
 ```
 
-### Example: Rain
+---
+
+## Rain Example
 
 ```json
 "statistics": {
@@ -557,7 +520,9 @@ Only statistics supported by the summarizer should be used.
 }
 ```
 
-### Example: WBT or WBGT
+---
+
+## WBT / WBGT Example
 
 ```json
 "statistics": {
@@ -567,15 +532,39 @@ Only statistics supported by the summarizer should be used.
 }
 ```
 
-Some specialized measurements, particularly wind and precipitation, receive additional processing by the summarizer beyond these basic statistics.
+---
 
-See [Technical Details](TECHNICAL_DETAILS.md) for those algorithms.
+## Wind Direction
+
+Wind direction typically uses:
+
+```json
+"statistics": {
+  "15min": ["circular_mean", "compass"],
+  "hourly": ["circular_mean", "compass"],
+  "daily": ["circular_mean", "compass"]
+}
+```
+
+---
+
+## Wind Gust
+
+Wind gust can use:
+
+```json
+"statistics": {
+  "15min": ["mean", "max", "max_gust_direction"],
+  "hourly": ["mean", "max", "max_gust_direction"],
+  "daily": ["mean", "max", "max_gust_direction"]
+}
+```
+
+See [Technical Details](TECHNICAL_DETAILS.md) for specialized wind processing.
 
 ---
 
 # Typical Aggregation Rules
-
-The current configurations generally use:
 
 | Measurement | 15-Minute | Hourly | Daily |
 | --- | --- | --- | --- |
@@ -590,15 +579,13 @@ The current configurations generally use:
 | WBT | Max | Max | Max |
 | WBGT | Max | Max | Max |
 | Soil Temperature | Mean | Mean | Mean, Min, Max |
-| Grass Minimum Temperature | Mean | Mean | Mean, Min, Max |
+| Grass Temperature | Mean | Mean | Mean, Min, Max |
 
-The configuration file and summarizer code remain authoritative if this table differs from a specific profile.
+The configuration profile remains authoritative.
 
 ---
 
-# Internal Variable Names
-
-Common 3D-PAWS internal variables include:
+# Common Internal Variable Names
 
 | Variable | Measurement |
 | --- | --- |
@@ -617,11 +604,10 @@ Common 3D-PAWS internal variables include:
 | `wgd` | Wind gust direction |
 | `rg` | Rain gauge 1 incremental rain |
 | `rgt` | Rain gauge 1 cumulative rain |
-| `rgp` | Rain gauge 1 prior cumulative rain |
+| `rgp` | Rain gauge 1 prior-day rain |
 | `rg2` | Rain gauge 2 incremental rain |
 | `rgt2` | Rain gauge 2 cumulative rain |
-| `rgp2` | Rain gauge 2 prior cumulative rain |
-| `gt1` | Grass minimum temperature |
+| `rgp2` | Rain gauge 2 prior-day rain |
 | `htu_t1` | Legacy HTU temperature |
 | `htu_h1` | Legacy HTU relative humidity |
 | `hth` | Health status |
@@ -630,13 +616,13 @@ Common 3D-PAWS internal variables include:
 | `cfr` | Charger fault register |
 | `bpc` | Battery percent charge |
 
-Additional soil and other environmental variables may also be defined by the profiles.
+Profiles may also define soil, grass, and other measurements.
 
 ---
 
 # Creating a New Regional Profile
 
-The easiest way to create a new profile is to start from the existing profile that most closely resembles the new station.
+Start by copying the closest existing profile.
 
 For example:
 
@@ -645,19 +631,21 @@ cp configs/summary_config_nadi.json \
    configs/summary_config_suva.json
 ```
 
-Then review and modify the new file.
+Then review the new file.
 
-## 1. Set the Profile Metadata
+---
 
-Update the profile name or regional information contained in the configuration.
+## 1. Update Profile Metadata
 
-The profile should clearly identify the environment for which its QC limits were developed.
+Set the profile name so the region or station environment is clearly identified.
+
+---
 
 ## 2. Review Source Columns
 
-Compare the station's CHORDS CSV headers with the configured `source_columns`.
+Run the summarizer against representative station data.
 
-When the summarizer runs, pay particular attention to:
+Review:
 
 ```text
 Mapped CHORDS variables:
@@ -669,31 +657,31 @@ and:
 Unmapped source columns:
 ```
 
-Add aliases where necessary.
+Add aliases where appropriate.
+
+---
 
 ## 3. Review Environmental Ranges
 
-Review every configured:
+Review all:
 
 ```text
 min
 max
 ```
 
-value for the new region.
+settings.
 
 Consider:
 
 - Elevation
 - Climate
-- Expected temperature extremes
-- Expected humidity range
-- Typical station pressure
-- Sensor measurement limits
+- Sensor limits
+- Legitimate extremes
 
-Do not make ranges unnecessarily narrow.
+Avoid unnecessarily narrow ranges.
 
-The purpose is to reject clearly invalid measurements, not unusual but legitimate weather.
+---
 
 ## 4. Review Temporal QC
 
@@ -706,106 +694,128 @@ max_rate_change_per_minute
 spike_max_neighbor_gap_seconds
 ```
 
-Temporal QC should remove obvious isolated sensor anomalies without suppressing legitimate rapid environmental changes.
+The goal is to remove isolated artifacts while retaining real environmental changes.
+
+---
 
 ## 5. Review Summary Statistics
 
-Verify that:
+Verify:
 
 ```text
 statistics
 ```
 
-contains the desired aggregation behavior for each measurement.
+for each variable.
+
+---
 
 ## 6. Select the Profile
 
-Update `summary.env`:
+In `summary.env`:
 
 ```text
 QC_PROFILE=suva
 ```
 
-The summarizer will then load:
+The summarizer will load:
 
 ```text
 configs/summary_config_suva.json
 ```
 
-## 7. Run a Test Dataset
+---
 
-Run the summarizer on a representative station dataset:
+## 7. Test the Profile
+
+Run:
 
 ```bash
 python summarize_chords.py /path/to/station.csv
 ```
 
-Review the console output carefully.
+Review both the meteorological outputs and the QC report.
 
 ---
 
 # Validating a New Profile
 
-Before using a new profile operationally, check the following.
+## Variable Mapping
 
-### Variable Mapping
+Check that:
 
-- Are all expected sensors mapped?
-- Are important columns unexpectedly listed as unmapped?
-- Are aliases mapping to the correct internal variables?
+- Expected sensors are mapped
+- Unexpected important columns are not left unmapped
+- Aliases map to the correct internal variables
 
-### Range QC
+---
 
-- Are large numbers of apparently valid measurements being removed?
-- Are known invalid or sentinel values removed?
-- Are the pressure limits appropriate for the station elevation?
-- Are legitimate environmental extremes retained?
+## Range QC
 
-### Temporal QC
+Check that:
 
-- Are only isolated anomalies being removed?
-- Are legitimate weather changes preserved?
-- Are large data gaps being handled appropriately?
+- Known invalid values are removed
+- Large numbers of apparently valid observations are not removed
+- Pressure limits are appropriate for station elevation
+- Legitimate extremes remain
 
-### Summary Output
+---
 
-- Do 15-minute values look reasonable?
-- Do hourly values agree with the underlying observations?
-- Do daily minimum and maximum values make sense?
-- Does circular wind direction behave correctly?
-- Is maximum gust direction associated with the maximum gust?
+## Temporal QC
 
-### Precipitation
+Check that:
 
-For stations with cumulative rain:
+- Isolated anomalies are removed
+- Real weather changes remain
+- Temporal QC is not bridging excessively large gaps
 
-- Does incremental rain approximately agree with cumulative change?
-- Are cumulative resets handled correctly?
+---
 
-For dual-gauge stations:
+## Meteorological Output
 
-- Do both gauges appear?
-- Are signed gauge differences reasonable?
+Check that:
 
-### Completeness
+- 15-minute values are reasonable
+- Hourly values agree with the source data
+- Daily min/max values make sense
+- Wind direction behaves correctly
+- Maximum gust direction corresponds to the maximum gust
+- Rain totals are reasonable
 
-- Does observation completeness correspond to known data gaps?
-- Does sensor completeness reveal known failed or missing sensors?
-- Is the correct `EXPECTED_INTERVAL_SECONDS` being used?
+---
+
+## QC Report and Completeness
+
+Review:
+
+```text
+<filename>_qc_report.csv
+```
+
+Check that:
+
+- Observation completeness corresponds to known data gaps
+- Partial first or last days are identified correctly
+- Variable completeness identifies failed or missing sensors
+- Sentinel-removal counts are reasonable
+- Range-QC counts are reasonable
+- Temporal-QC counts are reasonable
+- The correct expected observation cadence is being used
+- Rain increment and cumulative-change diagnostics agree when both are available
 
 ---
 
 # Common Configuration Problems
 
-## A Measurement Appears Under `Unmapped source columns`
+## Measurement Appears Under `Unmapped source columns`
 
-The CHORDS column name is probably not included in any `source_columns` list.
+The exact CHORDS name may not be listed in `source_columns`.
 
-If it represents an existing supported measurement, add the exact column name as an alias.
+Add the appropriate alias.
 
 ---
 
-## A Valid Measurement Is Being Removed by QC
+## Valid Measurements Are Being Removed
 
 Check:
 
@@ -813,8 +823,6 @@ Check:
 min
 max
 ```
-
-for that variable.
 
 If temporal QC is responsible, review:
 
@@ -825,11 +833,11 @@ max_rate_change_per_minute
 spike_max_neighbor_gap_seconds
 ```
 
-Do not simply disable QC without first determining why the observation was rejected.
+Determine why the measurement is being rejected before simply disabling QC.
 
 ---
 
-## A Sensor Does Not Appear in the Summary
+## Sensor Does Not Appear in the Summary
 
 Check:
 
@@ -837,15 +845,32 @@ Check:
 "include_in_summary": true
 ```
 
-and verify that the source column was successfully mapped.
+Verify that:
 
-Also confirm that appropriate statistics are defined.
+- the source column mapped successfully, and
+- the desired statistics are configured.
+
+---
+
+## Variable Completeness Does Not Appear
+
+Check:
+
+```json
+"include_completeness": true
+```
+
+Variable completeness is reported in the QC report rather than the meteorological summary files.
 
 ---
 
 ## Completeness Looks Incorrect
 
-Observation cadence is configured in `summary.env`, not in the regional JSON profile.
+Observation cadence is configured in:
+
+```text
+summary.env
+```
 
 Check:
 
@@ -854,43 +879,24 @@ EXPECTED_INTERVAL_SECONDS
 GAP_THRESHOLD_SECONDS
 ```
 
-For example, processing a 15-minute station as a 1-minute station will produce incorrect completeness estimates.
-
----
-
-## A Legacy Station Uses Different Sensor Names
-
-Add the legacy CHORDS column name to the appropriate `source_columns` list rather than changing the CSV.
-
-For example:
-
-```json
-"source_columns": [
-  "BMP390 Pressure (hPa)",
-  "BMX Pressure 1 (hPa)"
-]
-```
-
-allows both sensor naming conventions to map to the same pressure variable.
+A 15-minute station processed as a one-minute station will produce misleading completeness statistics.
 
 ---
 
 # Configuration Philosophy
 
-Configuration profiles should be designed conservatively.
+Profiles should be conservative.
 
-The goal is not to automatically decide whether every unusual environmental observation is correct or incorrect.
-
-Instead, the configuration should:
+Their goal is to:
 
 1. Map known CHORDS variables consistently.
 2. Remove clearly invalid sensor values.
-3. Identify obvious isolated sensor anomalies.
+3. Identify obvious isolated artifacts.
 4. Preserve legitimate environmental extremes.
-5. Apply appropriate meteorological aggregation.
-6. Make missing or problematic measurements visible through completeness statistics.
+5. Apply meteorologically appropriate aggregation.
+6. Make missing/problematic measurements visible through the QC report.
 7. Remain understandable and editable by network operators.
 
-When uncertain, prefer retaining a questionable but physically possible measurement over creating an overly aggressive QC rule.
+When uncertain, prefer retaining a physically possible observation over adding an overly aggressive QC rule.
 
-More sophisticated persistence, climatological, cross-variable, or network-level QC can be added separately without making the regional configuration profiles unnecessarily restrictive.
+More advanced persistence, climatological, cross-variable, or network-level QC can be added separately.

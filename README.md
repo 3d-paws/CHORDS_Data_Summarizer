@@ -8,17 +8,15 @@ The summarizer:
 
 - Applies configurable quality control
 - Identifies missing observations and calculates data completeness
-- Produces 15-minute, hourly, and daily summaries
-- Handles meteorological processing for temperature, humidity, pressure, wind, precipitation, soil temperature, WBT, WBGT, and other supported measurements
+- Produces 15-minute, hourly, and daily meteorological summaries
+- Creates a separate QC report containing completeness and data-quality diagnostics
 - Supports regional QC profiles and multiple generations of 3D-PAWS variable names
 
-It is developed as a companion to the [CHORDS Data Downloader](https://github.com/3d-paws/CHORDS_Data_Downloader), but either tool can be used independently.
+It was developed as a companion to the [CHORDS Data Downloader](https://github.com/3d-paws/CHORDS_Data_Downloader), but either tool can be used independently.
 
 ---
 
 ## Quick Start
-
-The summarizer requires Python and the packages listed in `requirements.txt`.
 
 ### Windows
 
@@ -43,13 +41,13 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-Create your local configuration file:
+Create the local configuration file:
 
 ```powershell
 Copy-Item ".\summary.env.example" ".\summary.env"
 ```
 
-Open it for editing:
+Open it:
 
 ```powershell
 notepad summary.env
@@ -61,7 +59,9 @@ Then run the summarizer:
 python summarize_chords.py "C:\path\to\station_data.csv"
 ```
 
-> If Python 3.10 is not installed or PowerShell prevents virtual environment activation, see the [Installation Guide](docs/INSTALLATION.md).
+For complete Windows setup instructions and troubleshooting, see the [Installation Guide](docs/INSTALLATION.md).
+
+---
 
 ### macOS / Linux
 
@@ -81,9 +81,11 @@ Edit `summary.env`, then run:
 python summarize_chords.py /path/to/station_data.csv
 ```
 
+For complete setup instructions, see the [Installation Guide](docs/INSTALLATION.md).
+
 ---
 
-## Configure the Summarizer
+## Configuration
 
 The local `summary.env` file controls the output location, regional QC profile, and expected station observation cadence.
 
@@ -135,23 +137,57 @@ the summarizer creates:
 station_data_15min.csv
 station_data_hourly.csv
 station_data_daily.csv
+station_data_qc_report.csv
 ```
 
-in the directory specified by `OUTPUT_PATH`.
+The 15-minute, hourly, and daily files contain meteorological statistics.
+
+Depending on the station configuration, these can include:
+
+- Temperature
+- Relative humidity
+- Atmospheric pressure
+- Wind speed and direction
+- Wind gust and maximum gust direction
+- Precipitation
+- Dual rain gauge comparisons
+- Soil temperature
+- Grass temperature
+- Wet Bulb Temperature
+- Wet Bulb Globe Temperature
+
+The QC report contains:
+
+- Dataset observation completeness
+- Daily observation completeness
+- Partial-day identification
+- Variable completeness
+- Sentinel/missing values removed
+- Range QC failures
+- Temporal spike/dip removals
+- Valid measurements remaining after QC
+- Incremental versus cumulative rain consistency checks
+
+For details about how these values are calculated, see [Technical Details](docs/TECHNICAL_DETAILS.md).
 
 ---
 
 ## Running It Again
 
-The virtual environment and dependencies only need to be created once.
+The Python environment and dependencies only need to be created once.
 
 ### Windows
 
 ```powershell
 cd C:\path\to\CHORDS_Data_Summarizer
 .\.venv\Scripts\Activate.ps1
-notepad summary.env
 python summarize_chords.py "C:\path\to\station_data.csv"
+```
+
+Edit the configuration first if necessary:
+
+```powershell
+notepad summary.env
 ```
 
 ### macOS / Linux
@@ -162,7 +198,7 @@ source .venv/bin/activate
 python summarize_chords.py /path/to/station_data.csv
 ```
 
-If your configuration has not changed, you do not need to edit `summary.env` before every run.
+If the existing `summary.env` settings are correct, the configuration file does not need to be edited before every run.
 
 ---
 
@@ -172,11 +208,19 @@ Additional documentation is available in the [`docs/`](docs/) directory.
 
 ### [Installation Guide](docs/INSTALLATION.md)
 
-Detailed setup instructions for Windows, macOS, and Linux, including Python installation, virtual environments, PowerShell configuration, and troubleshooting.
+Detailed setup instructions for Windows, macOS, and Linux, including:
+
+- Python installation
+- Virtual environments
+- PowerShell configuration
+- Creating `summary.env`
+- Running the tool
+- Updating the tool
+- Troubleshooting
 
 ### [Configuration Guide](docs/CONFIGURATION.md)
 
-Reference for the JSON regional profiles, including:
+Reference for the regional JSON profiles, including:
 
 - Variable mappings and aliases
 - QC ranges
@@ -188,16 +232,19 @@ Reference for the JSON regional profiles, including:
 
 ### [Technical Details](docs/TECHNICAL_DETAILS.md)
 
-Detailed explanation of how the summarizer processes data, including:
+Detailed explanation of the processing methods, including:
 
 - Missing observation detection
-- Observation and variable completeness
+- Observation completeness
+- Variable completeness
+- QC rejection counts
 - Sentinel and range QC
 - Temporal spike/dip QC
 - Wind direction and gust processing
 - Precipitation processing
 - Dual rain gauge comparisons
 - Meteorological aggregation
+- QC report structure
 
 ---
 
@@ -215,6 +262,8 @@ CHORDS CSV
 CHORDS Data Summarizer
       ↓
 15-Minute / Hourly / Daily Summary CSVs
+      +
+QC Report
 ```
 
 The Downloader and Summarizer are maintained separately so that either can be used independently.

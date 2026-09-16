@@ -1,155 +1,128 @@
 # CHORDS Data Summarizer — Technical Details
 
-This document describes the processing, quality-control, completeness, and aggregation methods used by the **CHORDS Data Summarizer**.
+This document describes the processing, quality-control, completeness, wind, precipitation, and aggregation methods used by the **CHORDS Data Summarizer**.
 
-For installation and basic usage, see the main [`README.md`](../README.md).
+For installation instructions, see the [Installation Guide](INSTALLATION.md).
 
-## Processing Overview
-
-The summarizer processes a CHORDS CSV in the following general order:
-
-1. Read and parse the CHORDS observations.
-2. Map source columns to configured internal variables.
-3. Identify missing observations from the original timestamps.
-4. Convert measurements to numeric values where appropriate.
-5. Remove configured missing/sentinel values.
-6. Apply environmental range QC.
-7. Apply temporal spike/dip QC where enabled.
-8. Calculate observation and variable completeness.
-9. Calculate precipitation changes and comparisons.
-10. Aggregate observations into 15-minute, hourly, and daily periods.
-11. Write the resulting summary CSV files.
-
-An important distinction is maintained between a **missing observation** and a **missing or invalid measurement**.
-
-A missing observation affects station-level observation completeness. A measurement rejected by QC affects the completeness of that variable but does not cause the entire observation to be considered missing.
-
-For information about creating or modifying regional QC profiles, variable mappings, QC limits, and summary settings, see the [Configuration Guide](CONFIGURATION.md).
+For information about creating or modifying regional QC profiles, see the [Configuration Guide](CONFIGURATION.md).
 
 ---
 
-## Variable Configuration
+# Processing Overview
 
-Measurement behavior is defined by regional JSON configuration files stored in:
+The summarizer processes a CHORDS CSV in the following order:
 
-```text
-configs/
-```
+1. Read the input CSV.
+2. Parse the `Time` column.
+3. Remove invalid timestamps.
+4. Sort observations chronologically.
+5. Remove duplicate timestamps.
+6. Infer missing observations from timestamp gaps.
+7. Map CHORDS columns to canonical variables.
+8. Convert mapped measurements to numeric values.
+9. Remove sentinel/missing measurements.
+10. Apply environmental range QC.
+11. Apply temporal spike/dip QC.
+12. Prepare cumulative-rain diagnostics.
+13. Create 15-minute meteorological summaries.
+14. Create hourly meteorological summaries.
+15. Create daily meteorological summaries.
+16. Create a separate QC report.
+17. Write all output files.
 
-Profiles follow the naming convention:
+An important distinction is maintained between:
 
-```text
-summary_config_<profile>.json
-```
+- a **missing observation**, and
+- a **missing or invalid measurement**.
 
-The profile is selected through:
+Missing observations affect station-level observation completeness.
 
-```text
-QC_PROFILE=<profile>
-```
-
-in `summary.env`.
-
-A typical variable definition is:
-
-```json
-"st1": {
-  "display_name": "SHT31D Temperature",
-  "unit": "degC",
-  "source_columns": [
-    "SHT31D Temperature (degC)",
-    "SHT Temperature (degC)"
-  ],
-  "type": "measurement",
-  "qc_enabled": true,
-  "temporal_qc_enabled": true,
-  "include_in_summary": true,
-  "include_completeness": true,
-  "min": 10,
-  "max": 45,
-  "spike_threshold": 5,
-  "neighbor_tolerance": 2,
-  "max_rate_change_per_minute": 3,
-  "spike_max_neighbor_gap_seconds": 180,
-  "statistics": {
-    "15min": ["mean"],
-    "hourly": ["mean"],
-    "daily": ["mean", "min", "max"]
-  }
-}
-```
-
-### Source Column Aliases
-
-`source_columns` allows different CHORDS variable names to map to the same internal variable.
-
-For example:
-
-```json
-"source_columns": [
-  "SHT31D Temperature (degC)",
-  "SHT Temperature (degC)"
-]
-```
-
-allows both newer and legacy station configurations to map to `st1`.
-
-This is also used for older FEWS NET variables such as:
-
-```text
-BMX Temperature 1
-BMX Pressure 1
-HTU Temperature 1
-HTU Humidity 1
-```
-
-When a configured measurement is not present in the input CSV, it is omitted rather than treated as an error.
-
-Unrecognized CHORDS columns are reported in the console so that new aliases can be identified.
+Invalid individual measurements affect variable completeness and QC statistics.
 
 ---
 
-## Observation Cadence
+# Input Timestamps
 
-Observation cadence is explicitly configured in `summary.env`.
+The input file must contain:
 
-For a nominal 1-minute station:
+```text
+Time
+```
+
+Timestamps are converted using pandas.
+
+Invalid timestamps are removed.
+
+The observations are then sorted chronologically.
+
+Exact duplicate timestamps are removed before completeness calculations.
+
+---
+
+# Observation Cadence
+
+Observation cadence is explicitly configured in:
+
+```text
+summary.env
+```
+
+For a one-minute station:
 
 ```text
 EXPECTED_INTERVAL_SECONDS=60
 GAP_THRESHOLD_SECONDS=120
 ```
 
-For a nominal 15-minute station:
+For a 15-minute station:
 
 ```text
 EXPECTED_INTERVAL_SECONDS=900
 GAP_THRESHOLD_SECONDS=1800
 ```
 
-### Why Cadence Is Explicit
+---
 
-The summarizer intentionally does not infer the primary observation interval from the input data.
+# Why Cadence Is Explicit
 
-3D-PAWS data loggers can continue collecting observations when communications are unavailable. Stored observations can later be transmitted when connectivity returns.
+The summarizer does not automatically infer the primary station measurement cadence.
 
-As a result, the timing of data transmission is not necessarily the same as the timing of measurement.
+3D-PAWS data loggers can continue collecting observations when communications are unavailable.
 
-Explicitly defining the expected measurement interval prevents communications outages, stored observations, and later backfills from being interpreted as changes in the station's measurement cadence.
+Stored observations may later be transmitted after communications recover.
+
+Therefore:
+
+```text
+measurement cadence
+```
+
+and:
+
+```text
+data transmission cadence
+```
+
+are not necessarily the same.
+
+Automatically inferring cadence from data gaps could mistake:
+
+- communications outages,
+- stored observations,
+- backfilled measurements, or
+- missing records
+
+for intentional configuration changes.
+
+The expected station cadence is therefore explicitly defined.
 
 ---
 
-## Missing Observation Detection
+# Missing Observation Detection
 
-Missing observations are inferred from the original measurement timestamps before environmental QC is applied.
+Missing observations are inferred from the original timestamp sequence before sensor QC is applied.
 
-The timestamps are:
-
-1. Sorted.
-2. Deduplicated.
-3. Compared sequentially.
-
-For each pair of observations:
+For each pair of consecutive observations:
 
 ```text
 previous observation → current observation
@@ -163,7 +136,7 @@ If:
 gap < GAP_THRESHOLD_SECONDS
 ```
 
-no observation is considered missing.
+the gap is treated as normal timing variation.
 
 If:
 
@@ -171,7 +144,7 @@ If:
 gap >= GAP_THRESHOLD_SECONDS
 ```
 
-the number of expected intervals within the gap is estimated.
+the number of expected measurement intervals is estimated.
 
 Conceptually:
 
@@ -183,48 +156,57 @@ missed observations =
     max(1, estimated intervals - 1)
 ```
 
-Missing timestamps are then generated at the expected measurement cadence between the two real observations.
+---
 
-### Example: 1-Minute Station
+## Example: One-Minute Station
 
-With:
+Using:
 
 ```text
 EXPECTED_INTERVAL_SECONDS=60
 GAP_THRESHOLD_SECONDS=120
 ```
 
-the behavior is:
+the behavior is approximately:
 
-| Time Between Observations | Estimated Missing |
-| ------------------------: | ----------------: |
-|                      60 s |                 0 |
-|                      65 s |                 0 |
-|                     119 s |                 0 |
-|                     120 s |                 1 |
-|                     127 s |                 1 |
-|                     180 s |                 2 |
-|                     240 s |                 3 |
+| Gap | Missing Observations |
+| ---: | ---: |
+| 60 s | 0 |
+| 65 s | 0 |
+| 119 s | 0 |
+| 120 s | 1 |
+| 127 s | 1 |
+| 180 s | 2 |
+| 240 s | 3 |
 
-This allows normal timestamp jitter without incorrectly counting observations as missing.
-
-### Assigning Missing Observations to Summary Periods
-
-The inferred missing timestamps are generated before aggregation.
-
-They can therefore be assigned to the appropriate:
-
-* 15-minute period
-* hourly period
-* daily period
-
-rather than assigning the entire gap to the period containing the observation following the gap.
+This approach tolerates ordinary logger timestamp drift while still identifying real gaps.
 
 ---
 
-## Observation Completeness
+# QC Report
 
-Each summary period contains:
+Each run creates:
+
+```text
+<filename>_qc_report.csv
+```
+
+The QC report separates data-quality diagnostics from the main meteorological summary products.
+
+The report currently contains four record types:
+
+```text
+Dataset
+Variable
+Daily Completeness
+Rain QC
+```
+
+---
+
+## `Dataset`
+
+Provides whole-file observation information including:
 
 ```text
 Observation Count
@@ -232,26 +214,94 @@ Estimated Missed Observations
 Observation Completeness (%)
 ```
 
-Observation completeness is calculated from the number of observations actually present and the number inferred to be missing.
+The notes field also records:
+
+```text
+EXPECTED_INTERVAL_SECONDS
+GAP_THRESHOLD_SECONDS
+```
+
+---
+
+## `Variable`
+
+Provides whole-file sensor-level QC information.
+
+Columns include:
+
+```text
+Variable
+Source Column
+Unit
+Variable Completeness (%)
+Raw Non-Missing
+Sentinel Removed
+Range QC Removed
+Temporal QC Removed
+Total QC Removed
+Valid After QC
+```
+
+This provides an audit trail of what measurements were removed before summary statistics were calculated.
+
+---
+
+## `Daily Completeness`
+
+Provides daily:
+
+```text
+Observation Count
+Estimated Missed Observations
+Observation Completeness (%)
+Partial Day
+```
+
+The `Partial Day` field identifies input-file boundaries that do not represent a complete calendar day.
+
+---
+
+## `Rain QC`
+
+Provides diagnostic comparison between:
+
+```text
+incremental rain sum
+```
+
+and:
+
+```text
+cumulative rain change
+```
+
+for each rain gauge where both values are available.
+
+---
+
+# Observation Completeness
+
+Observation completeness is recorded in the QC report rather than the meteorological summary files.
 
 Conceptually:
 
 ```text
 Observation Completeness (%) =
-    Observation Count
-    ---------------------------------------------
-    Observation Count + Estimated Missed Observations
+
+    Observed
+    -------------------------
+    Observed + Estimated Missing
     × 100
 ```
 
-For example, if a period contains:
+For example:
 
 ```text
 Observation Count = 55
 Estimated Missed Observations = 5
 ```
 
-then:
+produces:
 
 ```text
 Observation Completeness = 91.67%
@@ -259,114 +309,205 @@ Observation Completeness = 91.67%
 
 Observation completeness is calculated independently of sensor QC.
 
+A bad temperature measurement does not cause the whole station observation to be classified as missing.
+
 ---
 
-## Variable Completeness
+# Partial Days
 
-Variable completeness describes the availability of valid measurements for an individual sensor or derived variable.
+Completeness is based on the portion of the dataset actually represented by the input file.
 
-It accounts for:
-
-1. Observations missing entirely from the dataset.
-2. Observations present in the dataset where that measurement is missing or rejected by QC.
-
-This allows the summaries to distinguish between a station-wide data gap and an individual sensor problem.
+The first or last calendar day may contain only part of a day.
 
 For example:
 
 ```text
-Observation Completeness (%)        99.5
-SHT Temperature Completeness (%)    99.3
-HTU Humidity Completeness (%)        4.3
+Period:                         2026-09-15
+Partial Day:                    Yes
+Observation Count:              79
+Estimated Missed Observations:  0
+Observation Completeness:       100%
 ```
 
-would indicate that the station itself is reporting normally while the HTU humidity measurement is largely unavailable.
+does not mean that all observations expected during the full calendar day were received.
+
+It means that no missing observations were detected during the portion of September 15 included in the input file.
+
+The QC report therefore includes:
+
+```text
+Partial Day
+```
+
+for daily completeness records.
+
+The script allows approximately one expected observation interval around midnight so ordinary timestamp offsets do not incorrectly identify a complete day as partial.
 
 ---
 
-## Missing and Sentinel Value QC
+# Variable Completeness
 
-3D-PAWS measurements may use large negative numbers to represent unavailable or invalid sensor readings.
+Variable completeness describes the availability of usable values for an individual measurement.
 
-A global missing-value threshold is used so that values at or below the configured threshold are converted to missing values before aggregation.
+It accounts for:
 
-A typical threshold is:
+1. Station observations missing from the dataset.
+2. Observations where the variable itself is missing.
+3. Sentinel values removed by QC.
+4. Range-QC failures.
+5. Temporal-QC failures.
+
+Conceptually:
 
 ```text
--900
+Variable Completeness (%) =
+
+    Valid Values After QC
+    -----------------------------
+    Observed + Estimated Missing
+    × 100
 ```
 
-This captures values such as:
+For example:
+
+```text
+Observation Completeness (%)      99.5
+SHT Temperature Completeness (%)  99.3
+HTU Humidity Completeness (%)      4.3
+```
+
+would indicate that station reporting is healthy while the HTU humidity measurement is largely unavailable.
+
+---
+
+# Sentinel / Missing Value QC
+
+3D-PAWS sensors may report large negative numbers to represent unavailable or invalid readings.
+
+A global threshold is configured in the regional JSON profile.
+
+Example:
+
+```json
+"missing_value_threshold": -900
+```
+
+Values such as:
 
 ```text
 -999
 -999.9
 ```
 
-without requiring every possible sentinel value to be listed individually.
+are therefore converted to missing values before aggregation.
+
+The number removed is stored in:
+
+```text
+Sentinel Removed
+```
+
+in the QC report.
 
 ---
 
-## Environmental Range QC
+# Environmental Range QC
 
-Measurements with `qc_enabled` can define an acceptable range:
+Variables with:
+
+```json
+"qc_enabled": true
+```
+
+can define:
 
 ```json
 "min": 10,
 "max": 45
 ```
 
-Measurements outside that range are converted to missing values before summary statistics are calculated.
-
-The range is inclusive:
+A measurement is retained when:
 
 ```text
-min <= valid measurement <= max
+min <= measurement <= max
 ```
 
-### Regional Profiles
+Measurements outside that range are converted to missing.
 
-Range QC is configured regionally because reasonable environmental values differ substantially between locations.
+The number removed is recorded under:
 
-For example, station pressure at a high-elevation location such as Addis Ababa or Nairobi is naturally much lower than station pressure at a near-sea-level station in Fiji.
-
-For this reason, QC ranges should be treated as practical first-pass engineering limits rather than universal environmental or climatological limits.
+```text
+Range QC Removed
+```
 
 ---
 
-## Temporal Spike/Dip QC
+# Regional QC
 
-Temporal QC is designed to identify an **isolated measurement spike or dip**, not simply a large environmental change.
+Environmental range QC is profile-specific.
 
-For a candidate measurement, the algorithm evaluates the nearest valid measurement before it and the nearest valid measurement after it.
+Reasonable atmospheric pressure at a high-elevation station can differ substantially from pressure at a coastal station.
 
-The candidate can be rejected when all applicable conditions indicate that it is inconsistent with otherwise stable neighboring observations.
+Likewise, plausible temperature or soil-temperature ranges differ by climate.
 
-The configured parameters include:
+The regional limits should therefore be treated as:
 
-### `spike_threshold`
+```text
+first-pass engineering QC
+```
 
-Minimum difference between the candidate measurement and its neighboring measurements.
+rather than definitive climatological limits.
 
-### `neighbor_tolerance`
+---
 
-Maximum acceptable difference between the observations before and after the candidate.
+# Temporal Spike/Dip QC
 
-This helps establish that the surrounding observations agree with each other even though the candidate does not.
+Temporal QC is designed to identify isolated anomalies rather than simply large changes.
 
-### `max_rate_change_per_minute`
+A candidate observation is evaluated relative to the nearest valid observations before and after it.
 
-Minimum rate of change required for the candidate to be considered an implausibly rapid change.
+The configuration uses:
 
-The rate is evaluated using the actual elapsed time between observations.
+```text
+spike_threshold
+neighbor_tolerance
+max_rate_change_per_minute
+spike_max_neighbor_gap_seconds
+```
 
-### `spike_max_neighbor_gap_seconds`
+---
 
-Maximum allowed time between the candidate and neighboring valid measurements.
+## `spike_threshold`
 
-This prevents observations separated by large data gaps from being used to identify an isolated spike.
+Minimum difference between the candidate and each neighboring observation.
 
-### Conceptual Example
+---
+
+## `neighbor_tolerance`
+
+Maximum difference allowed between the observations surrounding the candidate.
+
+This helps establish that the surrounding data agree while the candidate does not.
+
+---
+
+## `max_rate_change_per_minute`
+
+Rate threshold used to determine whether the change occurred rapidly enough to be suspicious.
+
+Actual elapsed time is used.
+
+---
+
+## `spike_max_neighbor_gap_seconds`
+
+Maximum allowed time between the candidate and either neighboring valid observation.
+
+This prevents distant observations across large gaps from being treated as immediate neighbors.
+
+---
+
+## Conceptual Example
 
 Consider:
 
@@ -384,15 +525,14 @@ The value:
 35.8
 ```
 
-may be rejected if:
+may be removed if:
 
-* its difference from the preceding value exceeds the spike threshold,
-* its difference from the following value exceeds the spike threshold,
-* the preceding and following values agree within the neighbor tolerance,
-* the rate of change exceeds the configured threshold, and
-* the neighboring observations are sufficiently close in time.
+- it differs sufficiently from both neighbors,
+- the neighbors agree with each other,
+- the rate threshold is exceeded, and
+- the neighboring observations are close enough in time.
 
-By contrast, a sustained environmental change such as:
+A sustained change such as:
 
 ```text
 20
@@ -402,56 +542,87 @@ By contrast, a sustained environmental change such as:
 32
 ```
 
-should not be treated as an isolated spike because the neighboring measurements do not return to approximately the previous value.
+should not normally satisfy the isolated-spike criteria.
 
-### Bridging Missing Measurements
-
-Temporal QC operates on valid neighboring measurements rather than requiring them to occupy immediately adjacent CSV rows.
-
-This allows the algorithm to bridge over measurements already identified as missing or invalid.
-
-The maximum-neighbor-gap setting limits how far the algorithm is allowed to bridge.
-
----
-
-## Aggregation
-
-After QC, measurements are resampled into:
+The number removed is recorded as:
 
 ```text
-15-minute
-hourly
-daily
+Temporal QC Removed
 ```
-
-periods.
-
-Aggregation rules are configured independently for each measurement.
-
-Typical rules are:
-
-| Measurement               | 15-Minute     | Hourly        | Daily          |
-| ------------------------- | ------------- | ------------- | -------------- |
-| Temperature               | Mean          | Mean          | Mean, Min, Max |
-| Relative Humidity         | Mean          | Mean          | Mean, Min, Max |
-| Station Pressure          | Mean          | Mean          | Mean, Min, Max |
-| Mean Sea Level Pressure   | Mean          | Mean          | Mean, Min, Max |
-| Wind Speed                | Mean, Max     | Mean, Max     | Mean, Max      |
-| Wind Gust                 | Mean, Max     | Mean, Max     | Mean, Max      |
-| Wind Direction            | Circular Mean | Circular Mean | Circular Mean  |
-| Rain                      | Sum           | Sum           | Sum            |
-| WBT                       | Max           | Max           | Max            |
-| WBGT                      | Max           | Max           | Max            |
-| Soil Temperature          | Mean          | Mean          | Mean, Min, Max |
-| Grass Minimum Temperature | Mean          | Mean          | Mean, Min, Max |
-
-The JSON profile remains the authoritative definition of the statistics applied to individual variables.
 
 ---
 
-## Wind Direction
+# QC Counts
 
-Wind direction cannot be correctly averaged using a normal arithmetic mean because direction wraps at 360°.
+For each mapped variable, the QC report preserves:
+
+```text
+Raw Non-Missing
+Sentinel Removed
+Range QC Removed
+Temporal QC Removed
+Total QC Removed
+Valid After QC
+```
+
+`Total QC Removed` is calculated as:
+
+```text
+Sentinel Removed
++ Range QC Removed
++ Temporal QC Removed
+```
+
+These diagnostics make it possible to review how the final summarized values were produced.
+
+---
+
+# Meteorological Summary Files
+
+Three meteorological files are generated:
+
+```text
+<filename>_15min.csv
+<filename>_hourly.csv
+<filename>_daily.csv
+```
+
+These files are intentionally focused on meteorological statistics.
+
+Completeness and QC diagnostics are stored separately in:
+
+```text
+<filename>_qc_report.csv
+```
+
+---
+
+# Aggregation Rules
+
+Typical processing is:
+
+| Measurement | 15-Minute | Hourly | Daily |
+| --- | --- | --- | --- |
+| Air Temperature | Mean | Mean | Mean, Min, Max |
+| Relative Humidity | Mean | Mean | Mean, Min, Max |
+| Station Pressure | Mean | Mean | Mean, Min, Max |
+| MSLP | Mean | Mean | Mean, Min, Max |
+| Wind Speed | Mean, Max | Mean, Max | Mean, Max |
+| Wind Direction | Circular Mean | Circular Mean | Circular Mean |
+| Wind Gust | Mean, Max | Mean, Max | Mean, Max |
+| Rain | Sum | Sum | Sum |
+| WBT | Max | Max | Max |
+| WBGT | Max | Max | Max |
+| Soil Temperature | Mean | Mean | Mean, Min, Max |
+| Grass Temperature | Mean | Mean | Mean, Min, Max |
+
+The selected JSON profile remains the authoritative definition.
+
+---
+
+# Wind Direction
+
+Direction is circular data and cannot be averaged correctly with an ordinary arithmetic mean.
 
 For example:
 
@@ -460,223 +631,235 @@ For example:
 1°
 ```
 
-has an arithmetic mean of:
-
-```text
-180°
-```
-
-which is incorrect.
-
-The summarizer instead converts directions into circular components, averages those components, and converts the result back to degrees.
-
-The resulting circular mean is approximately:
+should average to approximately:
 
 ```text
 0°
 ```
 
-or North.
+rather than:
 
-### Compass Direction
+```text
+180°
+```
 
-Mean wind direction is also converted into a compass-direction label for easier interpretation.
+The summarizer therefore calculates a circular mean using sine and cosine components.
 
-Outputs can therefore contain both:
+Outputs include:
 
 ```text
 Wind Direction Mean (deg)
-Wind Direction Mean (Compass)
+Wind Direction Mean Compass
 ```
 
 ---
 
-## Maximum Wind Gust Direction
+# Maximum Gust Direction
 
-Wind gust direction is treated differently from mean wind direction.
+The maximum gust direction is not independently averaged.
 
 For each summary period:
 
-1. Find the maximum valid wind gust.
-2. Identify the exact source observation containing that gust.
+1. Find the maximum valid gust speed.
+2. Identify the original observation containing that gust.
 3. Retrieve the gust direction from that same observation.
 
-This produces:
+The result is reported as:
 
 ```text
-Wind Gust Maximum
-Maximum Wind Gust Direction (deg)
-Maximum Wind Gust Direction (Compass)
+Wind Gust Max
+Max Gust Direction (deg)
+Max Gust Direction Compass
 ```
-
-The gust direction is therefore associated with the actual maximum gust rather than being independently averaged.
 
 ---
 
-## Precipitation
+# Precipitation
 
-3D-PAWS stations may provide both incremental and cumulative precipitation measurements.
+The summarizer supports both:
 
-The summarizer processes these independently so they can be compared.
+```text
+incremental precipitation
+```
 
-### Incremental Rain
+and:
 
-Incremental rain measurements are summed within each aggregation period.
+```text
+cumulative precipitation
+```
 
-The calculation uses behavior equivalent to:
+Incremental precipitation is used in the main meteorological summaries.
+
+Cumulative precipitation is retained primarily for diagnostic QC.
+
+---
+
+# Incremental Rain
+
+Incremental rain values are summed over each period.
+
+Conceptually:
 
 ```python
 sum(min_count=1)
 ```
 
-This is important because a period containing no valid rain observations should remain missing rather than being incorrectly reported as zero rainfall.
+is used.
+
+This prevents a period with no valid rain measurements from automatically becoming:
+
+```text
+0 mm
+```
+
+when the correct state is unknown.
 
 ---
 
-## Cumulative Rain
+# Cumulative Rain
 
-Cumulative precipitation is processed by calculating the change between consecutive cumulative observations.
+Changes in cumulative rain are calculated between consecutive observations.
 
-For normal increasing values:
-
-```text
-Previous cumulative = 12.4 mm
-Current cumulative  = 12.8 mm
-Increment            = 0.4 mm
-```
-
-### Counter Resets
-
-A cumulative counter can reset.
-
-For example:
+Example:
 
 ```text
-Previous cumulative = 15.2 mm
-Current cumulative  = 0.6 mm
+12.4 → 12.8
 ```
 
-A simple difference would produce:
+produces:
 
 ```text
--14.6 mm
+0.4 mm
 ```
-
-which is not meaningful rainfall.
-
-When the cumulative difference is negative, the summarizer assumes a reset and uses the current cumulative value as the post-reset increment:
-
-```text
-Increment = 0.6 mm
-```
-
-These reset-aware increments are then summed within each summary period.
-
-### First Observation Limitation
-
-The first cumulative observation in an input file has no preceding observation.
-
-The summarizer therefore cannot determine how much rainfall occurred between that observation and the final observation before the beginning of the file.
-
-The first cumulative increment is consequently treated as unknown.
 
 ---
 
-## Incremental vs. Cumulative Rain Comparison
+# Cumulative Counter Resets
 
-When both incremental and cumulative rain measurements are available, the summaries include independent calculations such as:
+If the cumulative value decreases, the script assumes the counter reset.
+
+Example:
+
+```text
+15.2 → 0.6
+```
+
+would ordinarily produce:
+
+```text
+-14.6
+```
+
+but that is not meaningful rainfall.
+
+The summarizer instead treats:
+
+```text
+0.6
+```
+
+as the amount accumulated after the reset.
+
+---
+
+# First Cumulative Observation
+
+The first cumulative value in a file has no preceding observation.
+
+Therefore, the summarizer cannot determine how much rain occurred between that measurement and the last observation before the file begins.
+
+The first cumulative increment is treated as unknown.
+
+---
+
+# Rain QC
+
+When both incremental and cumulative rain are available, the QC report calculates:
+
+```text
+Rain Increment Sum
+Rain Cumulative Change
+Rain Difference
+```
+
+where:
+
+```text
+Rain Difference =
+    Incremental Rain Sum
+    - Cumulative Rain Change
+```
+
+A value near zero indicates agreement.
+
+This comparison is diagnostic.
+
+The script does not automatically decide which source is correct when they disagree.
+
+---
+
+# Dual Rain Gauges
+
+When both gauges are present, the meteorological summary includes:
 
 ```text
 Rain Gauge 1 Sum
-Rain Gauge 1 Cumulative Rain Total
-Rain Gauge 1 Cumulative Total Change
-Rain Gauge 1 Sum vs Cumulative Change Difference
+Rain Gauge 2 Sum
+Rain Gauge 1 vs 2 Difference
 ```
 
-The comparison difference is signed.
-
-Conceptually:
+The difference is signed:
 
 ```text
-Incremental Sum - Cumulative Change
+Gauge 1 - Gauge 2
 ```
 
-A value near zero indicates agreement between the independently reported precipitation measurements.
-
-The comparison is intended as a diagnostic and does not automatically determine which measurement is correct when they disagree.
+Cumulative rain comparisons are intentionally kept out of the main meteorological files and are handled through the QC report.
 
 ---
 
-## Dual Rain Gauges
+# System and Status Variables
 
-Some 3D-PAWS configurations contain two independent rain gauges.
-
-When both are available, the summarizer processes each gauge independently and calculates signed comparisons.
-
-For example:
-
-```text
-Rain Gauge 1 Sum - Rain Gauge 2 Sum
-```
-
-This preserves the direction of disagreement rather than reporting only the absolute difference.
-
-Dual-gauge comparisons can help identify:
-
-* blocked gauges,
-* mechanical problems,
-* configuration errors,
-* transmission problems, or
-* disagreement requiring further inspection.
-
-The summarizer does not automatically identify which gauge is correct.
-
----
-
-## System and Status Variables
-
-3D-PAWS observations can include operational variables such as:
+Profiles may map operational variables such as:
 
 ```text
 Health
-Cell Signal Strength
-Battery Current State
-Charger Fault Register
+Cellular Signal Strength
+Battery State
 Battery Percent Charge
 Battery Voltage
+Charger Fault Register
 ```
 
-These variables can be mapped by the configuration profiles so they are recognized by the software.
+These can be recognized and QC'd without being included in the meteorological summaries.
 
-They are currently excluded from the meteorological summary outputs.
-
-They may be used by future station-health or diagnostic processing.
+They may support future station-health diagnostics.
 
 ---
 
-## Console Diagnostics
+# Console Diagnostics
 
-The summarizer reports processing information to the console, including:
+While running, the script reports:
 
-* selected QC profile,
-* expected observation interval,
-* missing-observation gap threshold,
-* inferred missing observations,
-* mapped source variables,
-* configured variables not present,
-* unmapped source columns,
-* sentinel values removed,
-* range failures,
-* temporal QC failures,
-* source observation count,
-* observation period, and
-* generated output files.
+- Expected observation interval
+- Gap threshold
+- Inferred missing observations
+- Selected QC profile
+- Mapped variables
+- Configured variables not present
+- Unmapped columns
+- Sentinel values removed
+- Range-QC failures
+- Temporal-QC removals
+- Source observation count
+- Observation period
+- Generated files
 
-These diagnostics are intended to make configuration problems visible rather than silently ignoring unexpected data.
+These messages make configuration and data problems visible during processing.
 
 ---
 
-## Historical Cadence Changes
+# Historical Cadence Changes
 
 The current implementation assumes that:
 
@@ -684,27 +867,33 @@ The current implementation assumes that:
 EXPECTED_INTERVAL_SECONDS
 ```
 
-represents the expected cadence for the entire input file.
+applies to the complete input file.
 
-A historical dataset containing multiple intentional station cadences can therefore produce misleading completeness results if processed as one file.
+A historical file containing an intentional change from:
 
-For example, a file containing several weeks of 15-minute observations followed by a change to 1-minute observations should not be evaluated using a single cadence without accounting for that change.
+```text
+15-minute observations
+```
 
-Automatic cadence detection is intentionally not used because data gaps and backfilled observations can make cadence inference unreliable.
+to:
 
-Support for explicit cadence-change periods may be added in the future.
+```text
+1-minute observations
+```
+
+should not be evaluated with a single cadence unless that change is accounted for.
+
+Automatic cadence detection is intentionally avoided because communications outages and backfilled observations can make inference unreliable.
+
+Support for explicitly defined cadence-change periods may be added later.
 
 ---
 
-## Persistence and Stuck Sensors
+# Persistence / Stuck-Sensor QC
 
-The current QC does not automatically flag a measurement merely because it remains constant for an extended period.
+The current implementation does not automatically flag a measurement simply because it remains unchanged for a long period.
 
-This is intentional.
-
-Some environmental variables can legitimately remain unchanged for significant periods, while others remaining exactly constant—particularly at zero—may indicate a failed or disconnected sensor.
-
-A future persistence QC system could identify conditions such as:
+A future QC feature could detect conditions such as:
 
 ```text
 STUCK_ZERO
@@ -713,26 +902,25 @@ STUCK_VALUE
 
 over configurable periods.
 
-The preferred initial implementation would be **report-only**, rather than automatically removing the measurements.
+The preferred first implementation would be report-only rather than automatically deleting those measurements.
 
-This would allow persistent values to be investigated without incorrectly rejecting legitimate observations.
+This is particularly useful for unused or failed sensors that continuously report zero.
 
 ---
 
-## Design Principles
+# Design Principles
 
-The summarizer follows several general principles:
+The summarizer follows these principles:
 
-1. **Preserve the distinction between missing observations and bad measurements.**
-2. **Use measurement timestamps rather than transmission timing.**
-3. **Make expected station cadence explicit.**
-4. **Apply measurement-appropriate aggregation methods.**
-5. **Keep QC thresholds configurable.**
-6. **Support multiple generations of 3D-PAWS variable naming.**
-7. **Expose unexpected mappings and QC results rather than silently ignoring them.**
-8. **Treat regional QC as engineering screening rather than definitive climatological validation.**
-9. **Prefer diagnostic comparisons over automatically deciding which redundant sensor is correct.**
-10. **Avoid removing questionable data unless the QC condition is sufficiently well defined.**
-
-These principles are intended to make the output useful for operational 3D-PAWS networks while keeping the processing behavior understandable and configurable.
-
+1. Preserve the distinction between missing observations and invalid individual measurements.
+2. Use measurement timestamps rather than data-transmission timing.
+3. Explicitly configure expected station cadence.
+4. Keep meteorological statistics separate from QC diagnostics.
+5. Preserve a QC audit trail.
+6. Use measurement-appropriate aggregation.
+7. Keep environmental limits configurable.
+8. Support multiple generations of 3D-PAWS variable naming.
+9. Make unexpected mappings visible.
+10. Treat regional QC as engineering screening rather than definitive climatological validation.
+11. Prefer diagnostic comparisons over automatically deciding which redundant sensor is correct.
+12. Avoid removing questionable but physically possible observations without a sufficiently strong QC rule.
